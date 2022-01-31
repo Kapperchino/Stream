@@ -1,16 +1,11 @@
 package states.entity;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
-import org.apache.ratis.util.CollectionUtils;
-import org.apache.ratis.util.JavaUtils;
-import org.apache.ratis.util.LogUtils;
-import org.apache.ratis.util.Preconditions;
-import org.apache.ratis.util.TaskQueue;
+import org.apache.ratis.util.*;
 import org.apache.ratis.util.function.CheckedFunction;
 import org.apache.ratis.util.function.CheckedSupplier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import states.FileStoreCommon;
 
 import java.io.IOException;
@@ -28,9 +23,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+@Slf4j
 abstract class FileInfo {
-    public static final Logger LOG = LoggerFactory.getLogger(FileInfo.class);
-
     private final Path relativePath;
 
     FileInfo(Path relativePath) {
@@ -57,13 +51,13 @@ abstract class FileInfo {
             throw new IOException("Failed to read Committed: offset (=" + offset
                     + " + length (=" + length + ") > size = " + getCommittedSize()
                     + ", path=" + getRelativePath());
-        } else if (offset + length > getWriteSize()){
+        } else if (offset + length > getWriteSize()) {
             throw new IOException("Failed to read Wrote: offset (=" + offset
                     + " + length (=" + length + ") > size = " + getWriteSize()
                     + ", path=" + getRelativePath());
         }
 
-        try(SeekableByteChannel in = Files.newByteChannel(
+        try (SeekableByteChannel in = Files.newByteChannel(
                 resolver.apply(getRelativePath()), StandardOpenOption.READ)) {
             final ByteBuffer buffer = ByteBuffer.allocateDirect(FileStoreCommon.getChunkSize(length));
             in.position(offset).read(buffer);
@@ -99,11 +93,17 @@ abstract class FileInfo {
     }
 
     static class WriteInfo {
-        /** Future to make sure that each commit is executed after the corresponding write. */
+        /**
+         * Future to make sure that each commit is executed after the corresponding write.
+         */
         private final CompletableFuture<Integer> writeFuture;
-        /** Future to make sure that each commit is executed after the previous commit. */
+        /**
+         * Future to make sure that each commit is executed after the previous commit.
+         */
         private final CompletableFuture<Integer> commitFuture;
-        /** Previous commit index. */
+        /**
+         * Previous commit index.
+         */
         private final long previousIndex;
 
         WriteInfo(CompletableFuture<Integer> writeFuture, long previousIndex) {
@@ -126,18 +126,21 @@ abstract class FileInfo {
     }
 
     static class UnderConstruction extends FileInfo {
-        private FileStore.FileStoreDataChannel out;
-
-        /** The size written to a local file. */
-        private volatile long writeSize;
-        /** The size committed to client. */
-        private volatile long committedSize;
-
-        /** A queue to make sure that the writes are in order. */
+        /**
+         * A queue to make sure that the writes are in order.
+         */
         private final TaskQueue writeQueue = new TaskQueue("writeQueue");
         private final Map<Long, WriteInfo> writeInfos = new ConcurrentHashMap<>();
-
         private final AtomicLong lastWriteIndex = new AtomicLong(-1L);
+        private FileStore.FileStoreDataChannel out;
+        /**
+         * The size written to a local file.
+         */
+        private volatile long writeSize;
+        /**
+         * The size committed to client.
+         */
+        private volatile long committedSize;
 
         UnderConstruction(Path relativePath) {
             super(relativePath);
@@ -163,7 +166,7 @@ abstract class FileInfo {
                 ExecutorService executor, RaftPeerId id, long index) {
             final Supplier<String> name = () -> "create(" + getRelativePath() + ", "
                     + close + ") @" + id + ":" + index;
-            final CheckedSupplier<Integer, IOException> task = LogUtils.newCheckedSupplier(LOG, () -> {
+            final CheckedSupplier<Integer, IOException> task = LogUtils.newCheckedSupplier(log, () -> {
                 if (out == null) {
                     out = new FileStore.FileStoreDataChannel(resolver.apply(getRelativePath()));
                 }
@@ -177,7 +180,7 @@ abstract class FileInfo {
                 RaftPeerId id, long index) {
             final Supplier<String> name = () -> "write(" + getRelativePath() + ", "
                     + offset + ", " + close + ") @" + id + ":" + index;
-            final CheckedSupplier<Integer, IOException> task = LogUtils.newCheckedSupplier(LOG,
+            final CheckedSupplier<Integer, IOException> task = LogUtils.newCheckedSupplier(log,
                     () -> write(offset, data, close, sync), name);
             return submitWrite(task, executor, id, index);
         }
@@ -188,7 +191,7 @@ abstract class FileInfo {
             final CompletableFuture<Integer> f = writeQueue.submit(task, executor,
                     e -> new IOException("Failed " + task, e));
             final WriteInfo info = new WriteInfo(f, lastWriteIndex.getAndSet(index));
-            CollectionUtils.putNew(index, info, writeInfos, () ->  id + ":writeInfos");
+            CollectionUtils.putNew(index, info, writeInfos, () -> id + ":writeInfos");
             return f;
         }
 
@@ -245,7 +248,7 @@ abstract class FileInfo {
                         new IOException(name.get() + " is already committed."));
             }
 
-            final CheckedSupplier<Integer, IOException> task = LogUtils.newCheckedSupplier(LOG, () -> {
+            final CheckedSupplier<Integer, IOException> task = LogUtils.newCheckedSupplier(log, () -> {
                 if (offset != committedSize) {
                     throw new IOException("Offset/size mismatched: offset = "
                             + offset + " != committedSize = " + committedSize
@@ -266,8 +269,8 @@ abstract class FileInfo {
 
             // Remove previous info, if there is any.
             final WriteInfo previous = writeInfos.remove(info.getPreviousIndex());
-            final CompletableFuture<Integer> previousCommit = previous != null?
-                    previous.getCommitFuture(): CompletableFuture.completedFuture(0);
+            final CompletableFuture<Integer> previousCommit = previous != null ?
+                    previous.getCommitFuture() : CompletableFuture.completedFuture(0);
             // Commit after both current write and previous commit completed.
             return info.getWriteFuture().thenCombineAsync(previousCommit, (wSize, previousCommitSize) -> {
                 Preconditions.assertTrue(size == wSize);

@@ -16,48 +16,48 @@
 
 version: "3"
 services:
-   server1:
-      image: apache/ratis-runner
-      container_name: n0
-      hostname: n0
-      volumes:
-        - ../../../:/opt/ratis
-      ports:
-        - 9864
-      command: ["/opt/ratis/src/main/bin/server.sh", "filestore", "server",
-                "--id", "n0", "--storage", "/tmp/data",
-                "--peers", "n0:n0:9864,n1:n1:9864,n2:n2:9864"]
-
-   server2:
-      image: apache/ratis-runner
-      container_name: n1
-      hostname: n1
-      volumes:
+  server1:
+    image: apache/ratis-runner
+    container_name: n0
+    hostname: n0
+    volumes:
       - ../../../:/opt/ratis
-      ports:
+    ports:
       - 9864
-      command: ["/opt/ratis/src/main/bin/server.sh", "filestore", "server",
-                "--id", "n1", "--storage", "/tmp/data",
-                "--peers", "n0:n0:9864,n1:n1:9864,n2:n2:9864"]
+    command: [ "/opt/ratis/src/main/bin/server.sh", "filestore", "server",
+               "--id", "n0", "--storage", "/tmp/data",
+               "--peers", "n0:n0:9864,n1:n1:9864,n2:n2:9864" ]
 
-   server3:
-      image: apache/ratis-runner
-      container_name: n2
-      hostname: n2
-      volumes:
+  server2:
+    image: apache/ratis-runner
+    container_name: n1
+    hostname: n1
+    volumes:
       - ../../../:/opt/ratis
-      ports:
+    ports:
       - 9864
-      command: ["/opt/ratis/src/main/bin/server.sh", "filestore", "server",
-                "--id", "n2", "--storage", "/tmp/data",
-                "--peers", "n0:n0:9864,n1:n1:9864,n2:n2:9864"]
+    command: [ "/opt/ratis/src/main/bin/server.sh", "filestore", "server",
+               "--id", "n1", "--storage", "/tmp/data",
+               "--peers", "n0:n0:9864,n1:n1:9864,n2:n2:9864" ]
 
-   client:
-      image: apache/ratis-runner
-      container_name: client
-      hostname: client
-      volumes:
+  server3:
+    image: apache/ratis-runner
+    container_name: n2
+    hostname: n2
+    volumes:
       - ../../../:/opt/ratis
-      ports:
+    ports:
       - 9864
-      command: ["sleep", "infinity"]
+    command: [ "/opt/ratis/src/main/bin/server.sh", "filestore", "server",
+               "--id", "n2", "--storage", "/tmp/data",
+               "--peers", "n0:n0:9864,n1:n1:9864,n2:n2:9864" ]
+
+  client:
+    image: apache/ratis-runner
+    container_name: client
+    hostname: client
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9864
+    command: [ "sleep", "infinity" ]

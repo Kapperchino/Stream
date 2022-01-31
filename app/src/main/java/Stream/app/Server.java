@@ -35,75 +35,75 @@ import java.util.concurrent.TimeUnit;
 @Parameters(commandDescription = "Start an filestore server")
 public class Server extends SubCommandBase {
 
-  @Parameter(names = {"--id", "-i"}, description = "Raft id of this server", required = true)
-  private String id;
+    @Parameter(names = {"--id", "-i"}, description = "Raft id of this server", required = true)
+    private String id;
 
-  @Parameter(names = {"--storage", "-s"}, description = "Storage dir, eg. --storage dir1 --storage dir2",
-      required = true)
-  private List<File> storageDir = new ArrayList<>();
+    @Parameter(names = {"--storage", "-s"}, description = "Storage dir, eg. --storage dir1 --storage dir2",
+            required = true)
+    private List<File> storageDir = new ArrayList<>();
 
-  @Parameter(names = {"--writeThreadNum"}, description = "Number of write thread")
-  private int writeThreadNum = 20;
+    @Parameter(names = {"--writeThreadNum"}, description = "Number of write thread")
+    private int writeThreadNum = 20;
 
-  @Parameter(names = {"--readThreadNum"}, description = "Number of read thread")
-  private int readThreadNum = 20;
+    @Parameter(names = {"--readThreadNum"}, description = "Number of read thread")
+    private int readThreadNum = 20;
 
-  @Parameter(names = {"--commitThreadNum"}, description = "Number of commit thread")
-  private int commitThreadNum = 3;
+    @Parameter(names = {"--commitThreadNum"}, description = "Number of commit thread")
+    private int commitThreadNum = 3;
 
-  @Parameter(names = {"--deleteThreadNum"}, description = "Number of delete thread")
-  private int deleteThreadNum = 3;
+    @Parameter(names = {"--deleteThreadNum"}, description = "Number of delete thread")
+    private int deleteThreadNum = 3;
 
-  @Override
-  public void run() throws Exception {
-    JVMMetrics.initJvmMetrics(TimeDuration.valueOf(10, TimeUnit.SECONDS));
+    @Override
+    public void run() throws Exception {
+        JVMMetrics.initJvmMetrics(TimeDuration.valueOf(10, TimeUnit.SECONDS));
 
-    RaftPeerId peerId = RaftPeerId.valueOf(id);
-    RaftProperties properties = new RaftProperties();
+        RaftPeerId peerId = RaftPeerId.valueOf(id);
+        RaftProperties properties = new RaftProperties();
 
-    // Avoid leader change affect the performance
-    RaftServerConfigKeys.Rpc.setTimeoutMin(properties, TimeDuration.valueOf(2, TimeUnit.SECONDS));
-    RaftServerConfigKeys.Rpc.setTimeoutMax(properties, TimeDuration.valueOf(3, TimeUnit.SECONDS));
+        // Avoid leader change affect the performance
+        RaftServerConfigKeys.Rpc.setTimeoutMin(properties, TimeDuration.valueOf(2, TimeUnit.SECONDS));
+        RaftServerConfigKeys.Rpc.setTimeoutMax(properties, TimeDuration.valueOf(3, TimeUnit.SECONDS));
 
-    final int port = NetUtils.createSocketAddr(getPeer(peerId).getAddress()).getPort();
-    GrpcConfigKeys.Server.setPort(properties, port);
+        final int port = NetUtils.createSocketAddr(getPeer(peerId).getAddress()).getPort();
+        GrpcConfigKeys.Server.setPort(properties, port);
 
-    Optional.ofNullable(getPeer(peerId).getClientAddress()).ifPresent(address ->
-        GrpcConfigKeys.Client.setPort(properties, NetUtils.createSocketAddr(address).getPort()));
-    Optional.ofNullable(getPeer(peerId).getAdminAddress()).ifPresent(address ->
-        GrpcConfigKeys.Admin.setPort(properties, NetUtils.createSocketAddr(address).getPort()));
+        Optional.ofNullable(getPeer(peerId).getClientAddress()).ifPresent(address ->
+                GrpcConfigKeys.Client.setPort(properties, NetUtils.createSocketAddr(address).getPort()));
+        Optional.ofNullable(getPeer(peerId).getAdminAddress()).ifPresent(address ->
+                GrpcConfigKeys.Admin.setPort(properties, NetUtils.createSocketAddr(address).getPort()));
 
-    String dataStreamAddress = getPeer(peerId).getDataStreamAddress();
-    if (dataStreamAddress != null) {
-      final int dataStreamport = NetUtils.createSocketAddr(dataStreamAddress).getPort();
-      NettyConfigKeys.DataStream.setPort(properties, dataStreamport);
-      RaftConfigKeys.DataStream.setType(properties, SupportedDataStreamType.NETTY);
+        String dataStreamAddress = getPeer(peerId).getDataStreamAddress();
+        if (dataStreamAddress != null) {
+            final int dataStreamport = NetUtils.createSocketAddr(dataStreamAddress).getPort();
+            NettyConfigKeys.DataStream.setPort(properties, dataStreamport);
+            RaftConfigKeys.DataStream.setType(properties, SupportedDataStreamType.NETTY);
+        }
+        properties.setInt(GrpcConfigKeys.OutputStream.RETRY_TIMES_KEY, Integer.MAX_VALUE);
+        RaftServerConfigKeys.setStorageDir(properties, storageDir);
+        RaftServerConfigKeys.Write.setElementLimit(properties, 40960);
+        RaftServerConfigKeys.Write.setByteLimit(properties, SizeInBytes.valueOf("1000MB"));
+        ConfUtils.setFiles(properties::setFiles, FileStoreCommon.STATEMACHINE_DIR_KEY, storageDir);
+        RaftServerConfigKeys.DataStream.setAsyncRequestThreadPoolSize(properties, writeThreadNum);
+        RaftServerConfigKeys.DataStream.setAsyncWriteThreadPoolSize(properties, writeThreadNum);
+        ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_WRITE_THREAD_NUM, writeThreadNum);
+        ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_READ_THREAD_NUM, readThreadNum);
+        ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_COMMIT_THREAD_NUM, commitThreadNum);
+        ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_DELETE_THREAD_NUM, deleteThreadNum);
+        StateMachine stateMachine = new FileStoreStateMachine(properties);
+
+        final RaftGroup raftGroup = RaftGroup.valueOf(RaftGroupId.valueOf(ByteString.copyFromUtf8(getRaftGroupId())),
+                getPeers());
+        RaftServer raftServer = RaftServer.newBuilder()
+                .setServerId(RaftPeerId.valueOf(id))
+                .setStateMachine(stateMachine).setProperties(properties)
+                .setGroup(raftGroup)
+                .build();
+
+        raftServer.start();
+
+        for (; raftServer.getLifeCycleState() != LifeCycle.State.CLOSED; ) {
+            TimeUnit.SECONDS.sleep(1);
+        }
     }
-    properties.setInt(GrpcConfigKeys.OutputStream.RETRY_TIMES_KEY, Integer.MAX_VALUE);
-    RaftServerConfigKeys.setStorageDir(properties, storageDir);
-    RaftServerConfigKeys.Write.setElementLimit(properties, 40960);
-    RaftServerConfigKeys.Write.setByteLimit(properties, SizeInBytes.valueOf("1000MB"));
-    ConfUtils.setFiles(properties::setFiles, FileStoreCommon.STATEMACHINE_DIR_KEY, storageDir);
-    RaftServerConfigKeys.DataStream.setAsyncRequestThreadPoolSize(properties, writeThreadNum);
-    RaftServerConfigKeys.DataStream.setAsyncWriteThreadPoolSize(properties, writeThreadNum);
-    ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_WRITE_THREAD_NUM, writeThreadNum);
-    ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_READ_THREAD_NUM, readThreadNum);
-    ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_COMMIT_THREAD_NUM, commitThreadNum);
-    ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_DELETE_THREAD_NUM, deleteThreadNum);
-    StateMachine stateMachine = new FileStoreStateMachine(properties);
-
-    final RaftGroup raftGroup = RaftGroup.valueOf(RaftGroupId.valueOf(ByteString.copyFromUtf8(getRaftGroupId())),
-            getPeers());
-    RaftServer raftServer = RaftServer.newBuilder()
-        .setServerId(RaftPeerId.valueOf(id))
-        .setStateMachine(stateMachine).setProperties(properties)
-        .setGroup(raftGroup)
-        .build();
-
-    raftServer.start();
-
-    for (; raftServer.getLifeCycleState() != LifeCycle.State.CLOSED; ) {
-      TimeUnit.SECONDS.sleep(1);
-    }
-  }
 }

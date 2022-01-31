@@ -4,6 +4,7 @@
 
 plugins {
     id 'Stream.java-library-conventions'
+    id "io.freefair.lombok" version "6.3.0"
 }
 
 dependencies {

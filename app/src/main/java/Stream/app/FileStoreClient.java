@@ -1,30 +1,17 @@
 package Stream.app;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.client.RaftClient;
 import org.apache.ratis.client.api.DataStreamOutput;
 import org.apache.ratis.conf.RaftProperties;
-import org.apache.ratis.proto.ExamplesProtos.DeleteReplyProto;
-import org.apache.ratis.proto.ExamplesProtos.DeleteRequestProto;
-import org.apache.ratis.proto.ExamplesProtos.FileStoreRequestProto;
-import org.apache.ratis.proto.ExamplesProtos.ReadReplyProto;
-import org.apache.ratis.proto.ExamplesProtos.ReadRequestProto;
-import org.apache.ratis.proto.ExamplesProtos.StreamWriteRequestProto;
-import org.apache.ratis.proto.ExamplesProtos.WriteReplyProto;
-import org.apache.ratis.proto.ExamplesProtos.WriteRequestHeaderProto;
-import org.apache.ratis.proto.ExamplesProtos.WriteRequestProto;
-import org.apache.ratis.protocol.Message;
-import org.apache.ratis.protocol.RaftClientReply;
-import org.apache.ratis.protocol.RaftGroup;
-import org.apache.ratis.protocol.RaftPeer;
-import org.apache.ratis.protocol.RoutingTable;
+import org.apache.ratis.proto.ExamplesProtos.*;
+import org.apache.ratis.protocol.*;
 import org.apache.ratis.protocol.exceptions.StateMachineException;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.util.JavaUtils;
 import org.apache.ratis.util.Preconditions;
 import org.apache.ratis.util.ProtoUtils;
 import org.apache.ratis.util.function.CheckedFunction;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import states.FileStoreCommon;
 
 import java.io.Closeable;
@@ -34,10 +21,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Function;
 
-/** A standalone server using raft with a configurable state machine. */
+/**
+ * A standalone server using raft with a configurable state machine.
+ */
+@Slf4j
 public class FileStoreClient implements Closeable {
-    public static final Logger LOG = LoggerFactory.getLogger(FileStoreClient.class);
-
     private final RaftClient client;
 
     public FileStoreClient(RaftGroup group, RaftProperties properties)
@@ -59,11 +47,6 @@ public class FileStoreClient implements Closeable {
 
     public FileStoreClient(RaftClient client) {
         this.client = client;
-    }
-
-    @Override
-    public void close() throws IOException {
-        client.close();
     }
 
     static ByteString send(
@@ -89,6 +72,51 @@ public class FileStoreClient implements Closeable {
             Preconditions.assertTrue(reply.isSuccess(), () -> "Failed " + request + ", reply=" + reply);
             return reply.getMessage().getContent();
         });
+    }
+
+    private static <OUTPUT, THROWABLE extends Throwable> OUTPUT readImpl(
+            CheckedFunction<ByteString, OUTPUT, THROWABLE> sendReadOnlyFunction,
+            String path, long offset, long length) throws THROWABLE {
+        final ReadRequestProto read = ReadRequestProto.newBuilder()
+                .setPath(ProtoUtils.toByteString(path))
+                .setOffset(offset)
+                .setLength(length)
+                .build();
+
+        return sendReadOnlyFunction.apply(read.toByteString());
+    }
+
+    private static <OUTPUT, THROWABLE extends Throwable> OUTPUT writeImpl(
+            CheckedFunction<ByteString, OUTPUT, THROWABLE> sendFunction,
+            String path, long offset, boolean close, ByteBuffer data, boolean sync)
+            throws THROWABLE {
+        final WriteRequestHeaderProto.Builder header = WriteRequestHeaderProto.newBuilder()
+                .setPath(ProtoUtils.toByteString(path))
+                .setOffset(offset)
+                .setLength(data.remaining())
+                .setClose(close)
+                .setSync(sync);
+
+        final WriteRequestProto.Builder write = WriteRequestProto.newBuilder()
+                .setHeader(header)
+                .setData(ByteString.copyFrom(data));
+
+        final FileStoreRequestProto request = FileStoreRequestProto.newBuilder().setWrite(write).build();
+        return sendFunction.apply(request.toByteString());
+    }
+
+    private static <OUTPUT, THROWABLE extends Throwable> OUTPUT deleteImpl(
+            CheckedFunction<ByteString, OUTPUT, THROWABLE> sendFunction, String path)
+            throws THROWABLE {
+        final DeleteRequestProto.Builder delete = DeleteRequestProto.newBuilder()
+                .setPath(ProtoUtils.toByteString(path));
+        final FileStoreRequestProto request = FileStoreRequestProto.newBuilder().setDelete(delete).build();
+        return sendFunction.apply(request.toByteString());
+    }
+
+    @Override
+    public void close() throws IOException {
+        client.close();
     }
 
     private ByteString send(ByteString request) throws IOException {
@@ -118,18 +146,6 @@ public class FileStoreClient implements Closeable {
                 () -> ReadReplyProto.parseFrom(reply).getData()));
     }
 
-    private static <OUTPUT, THROWABLE extends Throwable> OUTPUT readImpl(
-            CheckedFunction<ByteString, OUTPUT, THROWABLE> sendReadOnlyFunction,
-            String path, long offset, long length) throws THROWABLE {
-        final ReadRequestProto read = ReadRequestProto.newBuilder()
-                .setPath(ProtoUtils.toByteString(path))
-                .setOffset(offset)
-                .setLength(length)
-                .build();
-
-        return sendReadOnlyFunction.apply(read.toByteString());
-    }
-
     public long write(String path, long offset, boolean close, ByteBuffer buffer, boolean sync)
             throws IOException {
         final int chunkSize = FileStoreCommon.getChunkSize(buffer.remaining());
@@ -151,34 +167,6 @@ public class FileStoreClient implements Closeable {
         return writeImpl(this::sendAsync, path, offset, close, buffer, sync
         ).thenApply(reply -> JavaUtils.supplyAndWrapAsCompletionException(
                 () -> WriteReplyProto.parseFrom(reply).getLength()));
-    }
-
-    private static <OUTPUT, THROWABLE extends Throwable> OUTPUT writeImpl(
-            CheckedFunction<ByteString, OUTPUT, THROWABLE> sendFunction,
-            String path, long offset, boolean close, ByteBuffer data, boolean sync)
-            throws THROWABLE {
-        final WriteRequestHeaderProto.Builder header = WriteRequestHeaderProto.newBuilder()
-                .setPath(ProtoUtils.toByteString(path))
-                .setOffset(offset)
-                .setLength(data.remaining())
-                .setClose(close)
-                .setSync(sync);
-
-        final WriteRequestProto.Builder write = WriteRequestProto.newBuilder()
-                .setHeader(header)
-                .setData(ByteString.copyFrom(data));
-
-        final FileStoreRequestProto request = FileStoreRequestProto.newBuilder().setWrite(write).build();
-        return sendFunction.apply(request.toByteString());
-    }
-
-    private static <OUTPUT, THROWABLE extends Throwable> OUTPUT deleteImpl(
-            CheckedFunction<ByteString, OUTPUT, THROWABLE> sendFunction, String path)
-            throws THROWABLE {
-        final DeleteRequestProto.Builder delete = DeleteRequestProto.newBuilder()
-                .setPath(ProtoUtils.toByteString(path));
-        final FileStoreRequestProto request = FileStoreRequestProto.newBuilder().setDelete(delete).build();
-        return sendFunction.apply(request.toByteString());
     }
 
     public String delete(String path) throws IOException {

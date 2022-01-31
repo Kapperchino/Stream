@@ -1,31 +1,8 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package states.state;
 
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.proto.ExamplesProtos;
-import org.apache.ratis.proto.ExamplesProtos.DeleteReplyProto;
-import org.apache.ratis.proto.ExamplesProtos.DeleteRequestProto;
-import org.apache.ratis.proto.ExamplesProtos.FileStoreRequestProto;
-import org.apache.ratis.proto.ExamplesProtos.ReadRequestProto;
-import org.apache.ratis.proto.ExamplesProtos.StreamWriteRequestProto;
-import org.apache.ratis.proto.ExamplesProtos.WriteRequestHeaderProto;
-import org.apache.ratis.proto.ExamplesProtos.WriteRequestProto;
+import org.apache.ratis.proto.ExamplesProtos.*;
 import org.apache.ratis.proto.RaftProtos.LogEntryProto;
 import org.apache.ratis.proto.RaftProtos.StateMachineLogEntryProto;
 import org.apache.ratis.protocol.Message;
@@ -127,10 +104,10 @@ public class FileStoreStateMachine extends BaseStateMachine {
 
         final WriteRequestHeaderProto h = proto.getWriteHeader();
         final CompletableFuture<Integer> f = files.write(entry.getIndex(),
-                h.getPath().toStringUtf8(), h.getClose(),  h.getSync(), h.getOffset(),
+                h.getPath().toStringUtf8(), h.getClose(), h.getSync(), h.getOffset(),
                 smLog.getStateMachineEntry().getStateMachineData());
         // sync only if closing the file
-        return h.getClose()? f: null;
+        return h.getClose() ? f : null;
     }
 
     @Override
@@ -153,31 +130,6 @@ public class FileStoreStateMachine extends BaseStateMachine {
                 files.read(h.getPath().toStringUtf8(), h.getOffset(), h.getLength(), false);
 
         return reply.thenApply(ExamplesProtos.ReadReplyProto::getData);
-    }
-
-    static class LocalStream implements DataStream {
-        private final DataChannel dataChannel;
-
-        LocalStream(DataChannel dataChannel) {
-            this.dataChannel = dataChannel;
-        }
-
-        @Override
-        public DataChannel getDataChannel() {
-            return dataChannel;
-        }
-
-        @Override
-        public CompletableFuture<?> cleanUp() {
-            return CompletableFuture.supplyAsync(() -> {
-                try {
-                    dataChannel.close();
-                    return true;
-                } catch (IOException e) {
-                    return FileStoreCommon.completeExceptionally("Failed to close data channel", e);
-                }
-            });
-        }
     }
 
     @Override
@@ -216,7 +168,7 @@ public class FileStoreStateMachine extends BaseStateMachine {
                     "Failed to parse logData in" + smLog, e);
         }
 
-        switch(request.getRequestCase()) {
+        switch (request.getRequestCase()) {
             case DELETE:
                 return delete(index, request.getDelete());
             case WRITEHEADER:
@@ -252,5 +204,30 @@ public class FileStoreStateMachine extends BaseStateMachine {
                 Message.valueOf(DeleteReplyProto.newBuilder().setResolvedPath(
                                 FileStoreCommon.toByteString(resolved)).build().toByteString(),
                         () -> "Message:" + resolved));
+    }
+
+    static class LocalStream implements DataStream {
+        private final DataChannel dataChannel;
+
+        LocalStream(DataChannel dataChannel) {
+            this.dataChannel = dataChannel;
+        }
+
+        @Override
+        public DataChannel getDataChannel() {
+            return dataChannel;
+        }
+
+        @Override
+        public CompletableFuture<?> cleanUp() {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    dataChannel.close();
+                    return true;
+                } catch (IOException e) {
+                    return FileStoreCommon.completeExceptionally("Failed to close data channel", e);
+                }
+            });
+        }
     }
 }

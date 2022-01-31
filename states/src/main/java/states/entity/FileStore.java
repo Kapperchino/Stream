@@ -1,22 +1,6 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package states.entity;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.conf.ConfUtils;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.proto.ExamplesProtos.ReadReplyProto;
@@ -26,21 +10,11 @@ import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.statemachine.StateMachine;
 import org.apache.ratis.statemachine.StateMachine.DataStream;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
-import org.apache.ratis.util.CollectionUtils;
-import org.apache.ratis.util.FileUtils;
-import org.apache.ratis.util.JavaUtils;
-import org.apache.ratis.util.LogUtils;
-import org.apache.ratis.util.StringUtils;
+import org.apache.ratis.util.*;
 import org.apache.ratis.util.function.CheckedSupplier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import states.FileStoreCommon;
 
-import java.io.Closeable;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -48,90 +22,62 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+@Slf4j
 public class FileStore implements Closeable {
-    public static final Logger LOG = LoggerFactory.getLogger(FileStore.class);
-
-    static class FileMap {
-        private final Object name;
-        private final Map<Path, FileInfo> map = new ConcurrentHashMap<>();
-
-        FileMap(Supplier<String> name) {
-            this.name = StringUtils.stringSupplierAsObject(name);
-        }
-
-        FileInfo get(String relative) throws FileNotFoundException {
-            return applyFunction(relative, map::get);
-        }
-
-        FileInfo remove(String relative) throws FileNotFoundException {
-            LOG.trace("{}: remove {}", name, relative);
-            return applyFunction(relative, map::remove);
-        }
-
-        private FileInfo applyFunction(String relative, Function<Path, FileInfo> f)
-                throws FileNotFoundException {
-            final FileInfo info = f.apply(normalize(relative));
-            if (info == null) {
-                throw new FileNotFoundException("File " + relative + " not found in " + name);
-            }
-            return info;
-        }
-
-        void putNew(FileInfo.UnderConstruction uc) {
-            LOG.trace("{}: putNew {}", name, uc.getRelativePath());
-            CollectionUtils.putNew(uc.getRelativePath(), uc, map, name::toString);
-        }
-
-        FileInfo.ReadOnly close(FileInfo.UnderConstruction uc) {
-            LOG.trace("{}: close {}", name, uc.getRelativePath());
-            final FileInfo.ReadOnly ro = new FileInfo.ReadOnly(uc);
-            CollectionUtils.replaceExisting(uc.getRelativePath(), uc, ro, map, name::toString);
-            return ro;
-        }
-    }
-
     private final Supplier<RaftPeerId> idSupplier;
     private final List<Supplier<Path>> rootSuppliers;
     private final FileMap files;
-
     private final ExecutorService writer;
     private final ExecutorService committer;
     private final ExecutorService reader;
     private final ExecutorService deleter;
-
     public FileStore(Supplier<RaftPeerId> idSupplier, RaftProperties properties) {
         this.idSupplier = idSupplier;
         this.rootSuppliers = new ArrayList<>();
 
         int writeThreadNum = ConfUtils.getInt(properties::getInt, FileStoreCommon.STATEMACHINE_WRITE_THREAD_NUM,
-                1, LOG::info);
+                1, log::info);
         int readThreadNum = ConfUtils.getInt(properties::getInt, FileStoreCommon.STATEMACHINE_READ_THREAD_NUM,
-                1, LOG::info);
+                1, log::info);
         int commitThreadNum = ConfUtils.getInt(properties::getInt, FileStoreCommon.STATEMACHINE_COMMIT_THREAD_NUM,
-                1, LOG::info);
+                1, log::info);
         int deleteThreadNum = ConfUtils.getInt(properties::getInt, FileStoreCommon.STATEMACHINE_DELETE_THREAD_NUM,
-                1, LOG::info);
+                1, log::info);
         writer = Executors.newFixedThreadPool(writeThreadNum);
         reader = Executors.newFixedThreadPool(readThreadNum);
         committer = Executors.newFixedThreadPool(commitThreadNum);
         deleter = Executors.newFixedThreadPool(deleteThreadNum);
 
         final List<File> dirs = ConfUtils.getFiles(properties::getFiles, FileStoreCommon.STATEMACHINE_DIR_KEY,
-                null, LOG::info);
+                null, log::info);
         Objects.requireNonNull(dirs, FileStoreCommon.STATEMACHINE_DIR_KEY + " is not set.");
         for (File dir : dirs) {
             this.rootSuppliers.add(
                     JavaUtils.memoize(() -> dir.toPath().resolve(getId().toString()).normalize().toAbsolutePath()));
         }
         this.files = new FileMap(JavaUtils.memoize(() -> idSupplier.get() + ":files"));
+    }
+
+    static Path normalize(String path) {
+        Objects.requireNonNull(path, "path == null");
+        return Paths.get(path).normalize();
+    }
+
+    static <T> CompletableFuture<T> submit(
+            CheckedSupplier<T, IOException> task, ExecutorService executor) {
+        final CompletableFuture<T> f = new CompletableFuture<>();
+        executor.submit(() -> {
+            try {
+                f.complete(task.get());
+            } catch (IOException e) {
+                f.completeExceptionally(new IOException("Failed " + task, e));
+            }
+        });
+        return f;
     }
 
     public RaftPeerId getId() {
@@ -152,11 +98,6 @@ public class FileStore implements Closeable {
         return roots;
     }
 
-    static Path normalize(String path) {
-        Objects.requireNonNull(path, "path == null");
-        return Paths.get(path).normalize();
-    }
-
     Path resolve(Path relative) throws IOException {
         final Path root = getRoot(relative);
         final Path full = root.resolve(relative).normalize().toAbsolutePath();
@@ -173,7 +114,7 @@ public class FileStore implements Closeable {
     public CompletableFuture<ReadReplyProto> read(String relative, long offset, long length, boolean readCommitted) {
         final Supplier<String> name = () -> "read(" + relative
                 + ", " + offset + ", " + length + ") @" + getId();
-        final CheckedSupplier<ReadReplyProto, IOException> task = LogUtils.newCheckedSupplier(LOG, () -> {
+        final CheckedSupplier<ReadReplyProto, IOException> task = LogUtils.newCheckedSupplier(log, () -> {
             final FileInfo info = files.get(relative);
             final ReadReplyProto.Builder reply = ReadReplyProto.newBuilder()
                     .setResolvedPath(FileStoreCommon.toByteString(info.getRelativePath()))
@@ -187,7 +128,7 @@ public class FileStore implements Closeable {
 
     public CompletableFuture<Path> delete(long index, String relative) {
         final Supplier<String> name = () -> "delete(" + relative + ") @" + getId() + ":" + index;
-        final CheckedSupplier<Path, IOException> task = LogUtils.newCheckedSupplier(LOG, () -> {
+        final CheckedSupplier<Path, IOException> task = LogUtils.newCheckedSupplier(log, () -> {
             final FileInfo info = files.remove(relative);
             FileUtils.delete(resolve(info.getRelativePath()));
             return info.getRelativePath();
@@ -195,22 +136,9 @@ public class FileStore implements Closeable {
         return submit(task, deleter);
     }
 
-    static <T> CompletableFuture<T> submit(
-            CheckedSupplier<T, IOException> task, ExecutorService executor) {
-        final CompletableFuture<T> f = new CompletableFuture<>();
-        executor.submit(() -> {
-            try {
-                f.complete(task.get());
-            } catch (IOException e) {
-                f.completeExceptionally(new IOException("Failed " + task, e));
-            }
-        });
-        return f;
-    }
-
     public CompletableFuture<WriteReplyProto> submitCommit(
             long index, String relative, boolean close, long offset, int size) {
-        final Function<FileInfo.UnderConstruction, FileInfo.ReadOnly> converter = close ? files::close: null;
+        final Function<FileInfo.UnderConstruction, FileInfo.ReadOnly> converter = close ? files::close : null;
         final FileInfo.UnderConstruction uc;
         try {
             uc = files.get(relative).asUnderConstruction();
@@ -229,8 +157,8 @@ public class FileStore implements Closeable {
 
     public CompletableFuture<Integer> write(
             long index, String relative, boolean close, boolean sync, long offset, ByteString data) {
-        final int size = data != null? data.size(): 0;
-        LOG.trace("write {}, offset={}, size={}, close? {} @{}:{}",
+        final int size = data != null ? data.size() : 0;
+        log.trace("write {}, offset={}, size={}, close? {} @{}:{}",
                 relative, offset, size, close, getId(), index);
         final boolean createNew = offset == 0L;
         final FileInfo.UnderConstruction uc;
@@ -246,8 +174,8 @@ public class FileStore implements Closeable {
             }
         }
 
-        return size == 0 && !close? CompletableFuture.completedFuture(0)
-                : createNew? uc.submitCreate(this::resolve, data, close, sync, writer, getId(), index)
+        return size == 0 && !close ? CompletableFuture.completedFuture(0)
+                : createNew ? uc.submitCreate(this::resolve, data, close, sync, writer, getId(), index)
                 : uc.submitWrite(offset, data, close, sync, writer, getId(), index);
     }
 
@@ -299,6 +227,45 @@ public class FileStore implements Closeable {
         }, writer);
     }
 
+    static class FileMap {
+        private final Object name;
+        private final Map<Path, FileInfo> map = new ConcurrentHashMap<>();
+
+        FileMap(Supplier<String> name) {
+            this.name = StringUtils.stringSupplierAsObject(name);
+        }
+
+        FileInfo get(String relative) throws FileNotFoundException {
+            return applyFunction(relative, map::get);
+        }
+
+        FileInfo remove(String relative) throws FileNotFoundException {
+            log.trace("{}: remove {}", name, relative);
+            return applyFunction(relative, map::remove);
+        }
+
+        private FileInfo applyFunction(String relative, Function<Path, FileInfo> f)
+                throws FileNotFoundException {
+            final FileInfo info = f.apply(normalize(relative));
+            if (info == null) {
+                throw new FileNotFoundException("File " + relative + " not found in " + name);
+            }
+            return info;
+        }
+
+        void putNew(FileInfo.UnderConstruction uc) {
+            log.trace("{}: putNew {}", name, uc.getRelativePath());
+            CollectionUtils.putNew(uc.getRelativePath(), uc, map, name::toString);
+        }
+
+        FileInfo.ReadOnly close(FileInfo.UnderConstruction uc) {
+            log.trace("{}: close {}", name, uc.getRelativePath());
+            final FileInfo.ReadOnly ro = new FileInfo.ReadOnly(uc);
+            CollectionUtils.replaceExisting(uc.getRelativePath(), uc, ro, map, name::toString);
+            return ro;
+        }
+    }
+
     public static class FileStoreDataChannel implements StateMachine.DataChannel {
         private final Path path;
         private final RandomAccessFile randomAccessFile;
@@ -310,7 +277,7 @@ public class FileStore implements Closeable {
 
         @Override
         public void force(boolean metadata) throws IOException {
-            LOG.debug("force({}) at {}", metadata, path);
+            log.debug("force({}) at {}", metadata, path);
             randomAccessFile.getChannel().force(metadata);
         }
 
