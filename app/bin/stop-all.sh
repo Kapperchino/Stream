@@ -14,5 +14,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
- kill $(jps | grep 'ratis-examples' | grep -v 'grep' | awk '{print $1}')
+ kill $(jps | grep 'Runner' | grep -v 'grep' | awk '{print $1}')
  echo "All Ratis examples have been stopped."

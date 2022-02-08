@@ -1,5 +1,7 @@
-package Stream.app;
+package Stream.app.cli;
 
+import Stream.app.FileStoreClient;
+import Stream.app.cli.Client;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 import org.apache.ratis.thirdparty.io.netty.buffer.ByteBuf;

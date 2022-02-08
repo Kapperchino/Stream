@@ -25,11 +25,17 @@ fi
 
 source $DIR/common.sh
 
-# One of the examples, e.g. "filestore" or "arithmetic"
-example="$1"
-shift
+C=''
+for i in "$@"; do
+    case "$i" in
+        *\'*)
+            i=`printf "%s" "$i" | sed "s/'/'\"'\"'/g"`
+            ;;
+        *) : ;;
+    esac
+    C="$C '$i'"
+done
 
-subcommand="$1"
-shift
+printf "$0%s\n" "$C"
 
-java ${LOGGER_OPTS} -jar $ARTIFACT "$example" "$subcommand" "$@"
+gradle run -p "../../" --args="$C"

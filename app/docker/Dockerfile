@@ -14,10 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM openjdk:8-jdk
-RUN apt-get update && apt-get install -y jq curl python python-pip sudo netcat && apt-get clean
+FROM arm64v8/openjdk:11
+RUN apt-get update && apt-get install -y jq curl python python3-pip sudo netcat && apt-get clean
 RUN pip install robotframework
-RUN wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.0/dumb-init_1.2.0_amd64
+RUN wget -O /usr/local/bin/dumb-init https://github.com/Yelp/dumb-init/releases/download/v1.2.5/dumb-init_1.2.5_aarch64
 RUN chmod +x /usr/local/bin/dumb-init
 RUN mkdir -p /etc/security/keytabs && chmod -R a+wr /etc/security/keytabs
 ADD https://repo.maven.apache.org/maven2/org/jboss/byteman/byteman/4.0.4/byteman-4.0.4.jar /opt/byteman.jar

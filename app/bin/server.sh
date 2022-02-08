@@ -17,4 +17,17 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $DIR/common.sh
 
-java ${LOGGER_OPTS} -jar $ARTIFACT "$@"
+C=''
+for i in "$@"; do
+    case "$i" in
+        *\'*)
+            i=`printf "%s" "$i" | sed "s/'/'\"'\"'/g"`
+            ;;
+        *) : ;;
+    esac
+    C="$C '$i'"
+done
+
+printf "$0%s\n" "$C"
+
+gradle run -p "../../" --args="$C"

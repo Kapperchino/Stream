@@ -24,12 +24,12 @@ if [[ -d "$LIB_DIR" ]]; then
    ARTIFACT=`ls -1 ${LIB_DIR}/*.jar`
 else
    #development directory layout
-   EXAMPLES_DIR=${SCRIPT_DIR}/../../../
+   EXAMPLES_DIR=${SCRIPT_DIR}/../
    if [[ -d "$EXAMPLES_DIR" ]]; then
       EXAMPLES_DIR=`cd ${EXAMPLES_DIR} > /dev/null; pwd`
    fi
-   JAR_PREFIX=`basename ${EXAMPLES_DIR}`
-   ARTIFACT=`ls -1 ${EXAMPLES_DIR}/target/${JAR_PREFIX}-*.jar | grep -v test | grep -v javadoc | grep -v sources | grep -v shaded`
+   JAR_PREFIX=`basename 'app'`
+   ARTIFACT=`ls -1 ${EXAMPLES_DIR}/build/libs/${JAR_PREFIX}.jar | grep -v test | grep -v javadoc | grep -v sources | grep -v shaded`
    if [[ ! -f "$ARTIFACT" ]]; then
       echo "Jar file is missing. Please do a full build (mvn clean package -DskipTests) first."
       exit -1

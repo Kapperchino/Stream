@@ -18,7 +18,7 @@ dependencies {
     implementation project(':states')
     implementation 'org.apache.ratis:ratis:2.+'
     implementation 'ch.qos.logback:logback-classic:1.2.5'
-    compileOnly 'org.apache.ratis:ratis-server:2.+'
+    implementation 'org.apache.ratis:ratis-server:2.+'
     implementation 'org.apache.ratis:ratis-grpc:2.2.+'
     implementation 'org.apache.ratis:ratis-netty:2.2.+'
     implementation 'com.google.guava:guava:31.0.1-jre'
@@ -28,5 +28,5 @@ dependencies {
 
 application {
     // Define the main class for the application.
-    mainClass = 'Stream.app.App'
+    mainClass = 'Stream.app.Runner'
 }

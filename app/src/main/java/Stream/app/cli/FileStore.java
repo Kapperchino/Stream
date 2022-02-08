@@ -1,7 +1,8 @@
-package Stream.app;
+package Stream.app.cli;
 
 import java.util.ArrayList;
 import java.util.List;
+
 
 /**
  * This class enumerates all the commands enqueued by FileStore state machine.

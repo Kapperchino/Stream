@@ -1,4 +1,4 @@
-package Stream.app;
+package Stream.app.cli;
 
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
@@ -7,7 +7,6 @@ import org.apache.ratis.conf.ConfUtils;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.datastream.SupportedDataStreamType;
 import org.apache.ratis.grpc.GrpcConfigKeys;
-import org.apache.ratis.metrics.JVMMetrics;
 import org.apache.ratis.netty.NettyConfigKeys;
 import org.apache.ratis.protocol.RaftGroup;
 import org.apache.ratis.protocol.RaftGroupId;
@@ -56,8 +55,6 @@ public class Server extends SubCommandBase {
 
     @Override
     public void run() throws Exception {
-        JVMMetrics.initJvmMetrics(TimeDuration.valueOf(10, TimeUnit.SECONDS));
-
         RaftPeerId peerId = RaftPeerId.valueOf(id);
         RaftProperties properties = new RaftProperties();
 

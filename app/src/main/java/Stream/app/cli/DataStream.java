@@ -1,5 +1,6 @@
-package Stream.app;
+package Stream.app.cli;
 
+import Stream.app.FileStoreClient;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 import org.apache.ratis.client.api.DataStreamOutput;
