@@ -1,0 +1,10 @@
+syntax = "proto3";
+option java_package = "models.proto.requests";
+option java_generate_equals_and_hash = true;
+
+message PublishRequest {
+  string key = 1;
+  string payload = 2;
+  string topic = 3;
+}
+

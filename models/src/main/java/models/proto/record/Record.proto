@@ -1,0 +1,11 @@
+syntax = "proto3";
+option java_package = "models.proto.record";
+option java_generate_equals_and_hash = true;
+
+message Record {
+  string key = 1;
+  string payload = 2;
+  string topic = 3;
+  int64 offset = 4;
+}
+
