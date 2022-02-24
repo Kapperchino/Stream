@@ -7,5 +7,6 @@ message Record {
   string payload = 2;
   string topic = 3;
   int64 offset = 4;
+  int64 fileOffset = 5;
 }
 
