@@ -15,6 +15,8 @@ dependencies {
     implementation 'ch.qos.logback:logback-classic:1.2.5'
     implementation 'org.apache.ratis:ratis-server:2.+'
     implementation 'org.apache.ratis:ratis-grpc:2.2.+'
+    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.19.4'
+    implementation group: 'com.google.protobuf', name: 'protobuf-java-util', version: '3.19.4'
     implementation 'com.google.guava:guava:31.0.1-jre'
     implementation 'com.google.dagger:dagger:2.+'
 }

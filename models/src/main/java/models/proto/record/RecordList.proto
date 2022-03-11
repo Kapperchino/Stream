@@ -1,10 +1,9 @@
 syntax = "proto3";
 option java_package = "models.proto.record";
 option java_generate_equals_and_hash = true;
+import "RecordResult.proto";
 
-message Record {
-  string key = 1;
-  bytes payload = 2;
-  string topic = 3;
+message RecordList {
+  repeated RecordResult records = 1;
 }
 

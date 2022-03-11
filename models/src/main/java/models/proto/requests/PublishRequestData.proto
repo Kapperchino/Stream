@@ -2,11 +2,9 @@ syntax = "proto3";
 option java_package = "models.proto.requests";
 option java_generate_equals_and_hash = true;
 import "PublishRequestHeader.proto";
-import "PublishRequestData.proto";
 import "Record.proto";
 
-message PublishRequest {
-  PublishRequestHeader header = 1;
-  PublishRequestData data = 2;
+message PublishRequestData {
+  repeated Record data = 1;
 }
 
