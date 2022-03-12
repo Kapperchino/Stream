@@ -40,6 +40,7 @@ public class PartitionStateMachine extends BaseStateMachine {
     public void initialize(RaftServer server, RaftGroupId groupId, RaftStorage raftStorage)
             throws IOException {
         super.initialize(server, groupId, raftStorage);
+        this.partitionManager.createPartition("Test", 0);
         this.storage.init(raftStorage);
         for (Path path : files.getRoots()) {
             FileUtils.createDirectories(path);
@@ -96,9 +97,8 @@ public class PartitionStateMachine extends BaseStateMachine {
                     entry.getIndex(), "Failed to parse data, entry=" + entry, e);
         }
         var header = proto.getHeader();
-        partitionManager.writeToPartition(entry.getIndex(), header.getTopic(), 0, proto.getData().getDataList());
+        return partitionManager.writeToPartition(entry.getIndex(), header.getTopic(), 0, proto.getData().getDataList());
         // sync only if closing the file
-        return null;
     }
 
     @Override

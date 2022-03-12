@@ -1,6 +1,7 @@
 package states.partitions;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import models.lombok.Partition;
@@ -23,6 +24,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -69,12 +71,12 @@ public class PartitionManager {
     }
 
     @SneakyThrows
-    public void writeToPartition(long index, String topicName, int id, List<Record> records) {
+    public CompletableFuture<Integer> writeToPartition(long index, String topicName, int id, List<Record> records) {
         if (Strings.isNullOrEmpty(topicName) || store == null) {
             throw new NullPointerException();
         }
         if (records.isEmpty()) {
-            return;
+            return null;
         }
         var partition = getPartition(topicName, id);
         var segment = partition.getLastSegment();
@@ -96,25 +98,32 @@ public class PartitionManager {
             curSegFileLeft -= curRec.getSerializedSize();
             i++;
         }
-        store.write(0, segment.getRelativePath().toString(), false, true, 0, ByteString.copyFrom(buffer));
+        var f = store
+                .write(index, segment.getRelativePath().toString(), true, true, 0, ByteString.copyFrom(buffer));
+
         //write to file
         if (i >= records.size() - 1) {
-            store.close();
-            return;
+            return f;
         }
         //iterate through other records
         buffer.clear();
+        var builder = ImmutableList.<CompletableFuture<Integer>>builder();
         for (int x = i; i < records.size(); x++) {
             segment = partition.addSegment();
             //fill the buffer up
             while (buffer.position() + records.get(x).getSerializedSize() < Config.MAX_SIZE_PER_SEG) {
                 buffer.put(records.get(x).toByteArray());
                 partition.putRecordInfo(records.get(x), offset, segment.getSegmentId());
+                x++;
             }
-            store.write(0, segment.getRelativePath().toString(), false, true, 0, ByteString.copyFrom(buffer));
+            builder.add(store.write(index, segment.getRelativePath().toString(), false, true, 0, ByteString.copyFrom(buffer)));
             buffer.clear();
         }
-        store.close();
+        var list = builder.build();
+        for(var future : list){
+            f = f.thenCompose((a) -> future);
+        }
+        return f;
     }
 
     @SneakyThrows
