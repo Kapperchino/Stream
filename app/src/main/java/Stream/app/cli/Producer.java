@@ -1,21 +1,17 @@
 package Stream.app.cli;
 
 import Stream.app.FileStoreClient;
+import Stream.app.ProducerClient;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
+import com.google.common.collect.ImmutableList;
+import com.google.protobuf.ByteString;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.ratis.thirdparty.io.netty.buffer.ByteBuf;
-import org.apache.ratis.thirdparty.io.netty.buffer.PooledByteBufAllocator;
+import models.proto.record.RecordOuterClass.Record;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.channels.FileChannel;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -27,17 +23,8 @@ import java.util.concurrent.Executors;
 @Slf4j
 public class Producer extends Client {
 
-    @Parameter(names = {"--sync"}, description = "Whether sync every bufferSize", required = false)
-    private int sync = 0;
-
     @Parameter(names = {"--file"}, description = "Proto file for the producer", required = false)
     private String path = null;
-
-    @Parameter(names = {"--key", "--k"}, description = "Key for the record to send", required = true)
-    private String key = null;
-
-    @Parameter(names = {"--val", "--v"}, description = "Value for the record to send", required = true)
-    private String val = null;
 
     @Parameter(names = {"--topic", "--t"}, description = "Topic to produce records to", required = true)
     private String topic = null;
@@ -45,86 +32,37 @@ public class Producer extends Client {
 
     @Override
     protected void operation(List<FileStoreClient> clients) throws IOException, ExecutionException, InterruptedException {
+
+    }
+
+    @Override
+    protected void streamOperation(List<ProducerClient> clients) throws IOException, ExecutionException, InterruptedException {
         final ExecutorService executor = Executors.newFixedThreadPool(getNumThread());
-        List<String> paths = generateFiles(executor);
         dropCache();
         log.info("Starting Async write now ");
 
         long startTime = System.currentTimeMillis();
-
-
-
+        var resultListBuilder = ImmutableList.builder();
+        int x = 0;
+        for (var client : clients) {
+            var builder = Record.newBuilder();
+            builder.setKey(Integer.toString(x++));
+            byte[] b = new byte[20];
+            new Random().nextBytes(b);
+            builder.setPayload(ByteString.copyFrom(b));
+            builder.setTopic(topic);
+            var listBuilder = ImmutableList.<Record>builder();
+            for (int i = 0; i < 10; i++) {
+                listBuilder.add(builder.build());
+            }
+            resultListBuilder.add(client.publish(builder.getKey(), listBuilder.build(), "Test"));
+        }
+        var resultList = resultListBuilder.build();
+        log.info("Results: {}", resultList);
         long endTime = System.currentTimeMillis();
 
-
-        stop(clients);
+        stopProducers(clients);
     }
 
-    long write(FileChannel in, long offset, FileStoreClient fileStoreClient, String path,
-               List<CompletableFuture<Long>> futures) throws IOException {
-        final int bufferSize = getBufferSizeInBytes();
-        final ByteBuf buf = PooledByteBufAllocator.DEFAULT.heapBuffer(bufferSize);
-        final int bytesRead = buf.writeBytes(in, bufferSize);
 
-        if (bytesRead < 0) {
-            throw new IllegalStateException("Failed to read " + bufferSize + " byte(s) from " + this
-                    + ". The channel has reached end-of-stream at " + offset);
-        } else if (bytesRead > 0) {
-            final CompletableFuture<Long> f = fileStoreClient.writeAsync(
-                    path, offset, offset + bytesRead == getFileSizeInBytes(), buf.nioBuffer(),
-                    sync == 1);
-            f.thenRun(buf::release);
-            futures.add(f);
-        }
-        return bytesRead;
-    }
-
-    private Map<String, CompletableFuture<List<CompletableFuture<Long>>>> writeByHeapByteBuffer(
-            List<String> paths, List<FileStoreClient> clients, ExecutorService executor) {
-        Map<String, CompletableFuture<List<CompletableFuture<Long>>>> fileMap = new HashMap<>();
-
-        int clientIndex = 0;
-        for (String path : paths) {
-            final CompletableFuture<List<CompletableFuture<Long>>> future = new CompletableFuture<>();
-            final FileStoreClient client = clients.get(clientIndex % clients.size());
-            clientIndex++;
-            CompletableFuture.supplyAsync(() -> {
-                List<CompletableFuture<Long>> futures = new ArrayList<>();
-                File file = new File(path);
-                try (FileInputStream fis = new FileInputStream(file)) {
-                    final FileChannel in = fis.getChannel();
-                    for (long offset = 0L; offset < getFileSizeInBytes(); ) {
-                        offset += write(in, offset, client, file.getName(), futures);
-                    }
-                } catch (Throwable e) {
-                    future.completeExceptionally(e);
-                }
-
-                future.complete(futures);
-                return future;
-            }, executor);
-
-            fileMap.put(path, future);
-        }
-
-        return fileMap;
-    }
-
-    private long waitWriteFinish(Map<String, CompletableFuture<List<CompletableFuture<Long>>>> fileMap)
-            throws ExecutionException, InterruptedException {
-        long totalBytes = 0;
-        for (CompletableFuture<List<CompletableFuture<Long>>> futures : fileMap.values()) {
-            long writtenLen = 0;
-            for (CompletableFuture<Long> future : futures.get()) {
-                writtenLen += future.join();
-            }
-
-            if (writtenLen != getFileSizeInBytes()) {
-                System.out.println("File written:" + writtenLen + " does not match expected:" + getFileSizeInBytes());
-            }
-
-            totalBytes += writtenLen;
-        }
-        return totalBytes;
-    }
 }

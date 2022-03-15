@@ -1,5 +1,7 @@
 package states.state;
 
+import lombok.SneakyThrows;
+import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
 import models.proto.requests.PublishRequestOuterClass.PublishRequest;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.proto.ExamplesProtos.*;
@@ -143,6 +145,7 @@ public class PartitionStateMachine extends BaseStateMachine {
         return files.streamLink(stream);
     }
 
+    @SneakyThrows
     @Override
     public CompletableFuture<Message> applyTransaction(TransactionContext trx) {
         final LogEntryProto entry = trx.getLogEntry();
@@ -151,35 +154,14 @@ public class PartitionStateMachine extends BaseStateMachine {
         updateLastAppliedTermIndex(entry.getTerm(), index);
 
         final StateMachineLogEntryProto smLog = entry.getStateMachineLogEntry();
-        final FileStoreRequestProto request;
-        try {
-            request = FileStoreRequestProto.parseFrom(smLog.getLogData());
-        } catch (InvalidProtocolBufferException e) {
-            return FileStoreCommon.completeExceptionally(index,
-                    "Failed to parse logData in" + smLog, e);
-        }
-
-        switch (request.getRequestCase()) {
-            case DELETE:
-                return delete(index, request.getDelete());
-            case WRITEHEADER:
-                return writeCommit(index, request.getWriteHeader(), smLog.getStateMachineEntry().getStateMachineData().size());
-            case STREAM:
-                return streamCommit(request.getStream());
-            case WRITE:
-                // WRITE should not happen here since
-                // startTransaction converts WRITE requests to WRITEHEADER requests.
-            default:
-                LOG.error(getId() + ": Unexpected request case " + request.getRequestCase());
-                return FileStoreCommon.completeExceptionally(index,
-                        "Unexpected request case " + request.getRequestCase());
-        }
+        final PublishRequest request;
+        request = PublishRequest.parseFrom(smLog.getLogData());
+        return writeCommit(index, request.getHeader(), smLog.getStateMachineEntry().getStateMachineData().size());
     }
 
     private CompletableFuture<Message> writeCommit(
-            long index, WriteRequestHeaderProto header, int size) {
-        final String path = header.getPath().toStringUtf8();
-        return files.submitCommit(index, path, header.getClose(), header.getOffset(), size)
+            long index, PublishRequestHeader header, int size) {
+        return partitionManager.submitCommit(index, header, size)
                 .thenApply(reply -> Message.valueOf(reply.toByteString()));
     }
 

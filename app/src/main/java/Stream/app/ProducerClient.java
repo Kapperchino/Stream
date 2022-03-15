@@ -8,7 +8,6 @@ import models.proto.requests.PublishRequestOuterClass.PublishRequest;
 import models.proto.responses.PublishResponseOuterClass.PublishResponse;
 import org.apache.ratis.client.RaftClient;
 import org.apache.ratis.conf.RaftProperties;
-import org.apache.ratis.proto.ExamplesProtos.ReadRequestProto;
 import org.apache.ratis.proto.ExamplesProtos.WriteReplyProto;
 import org.apache.ratis.protocol.Message;
 import org.apache.ratis.protocol.RaftClientReply;
@@ -18,7 +17,6 @@ import org.apache.ratis.protocol.exceptions.StateMachineException;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.util.JavaUtils;
 import org.apache.ratis.util.Preconditions;
-import org.apache.ratis.util.ProtoUtils;
 import org.apache.ratis.util.function.CheckedFunction;
 
 import java.io.Closeable;
@@ -32,10 +30,10 @@ import java.util.function.Function;
  * A standalone server using raft with a configurable state machine.
  */
 @Slf4j
-public class StreamClient implements Closeable {
+public class ProducerClient implements Closeable {
     private final RaftClient client;
 
-    public StreamClient(RaftGroup group, RaftProperties properties)
+    public ProducerClient(RaftGroup group, RaftProperties properties)
             throws IOException {
         this.client = RaftClient.newBuilder()
                 .setProperties(properties)
@@ -43,7 +41,7 @@ public class StreamClient implements Closeable {
                 .build();
     }
 
-    public StreamClient(RaftGroup group, RaftProperties properties, RaftPeer primaryDataStreamServer)
+    public ProducerClient(RaftGroup group, RaftProperties properties, RaftPeer primaryDataStreamServer)
             throws IOException {
         this.client = RaftClient.newBuilder()
                 .setProperties(properties)
@@ -52,7 +50,7 @@ public class StreamClient implements Closeable {
                 .build();
     }
 
-    public StreamClient(RaftClient client) {
+    public ProducerClient(RaftClient client) {
         this.client = client;
     }
 

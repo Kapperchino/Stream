@@ -20,7 +20,7 @@ import org.apache.ratis.util.NetUtils;
 import org.apache.ratis.util.SizeInBytes;
 import org.apache.ratis.util.TimeDuration;
 import states.FileStoreCommon;
-import states.state.FileStoreStateMachine;
+import states.state.PartitionStateMachine;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -87,7 +87,7 @@ public class Server extends SubCommandBase {
         ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_READ_THREAD_NUM, readThreadNum);
         ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_COMMIT_THREAD_NUM, commitThreadNum);
         ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_DELETE_THREAD_NUM, deleteThreadNum);
-        StateMachine stateMachine = new FileStoreStateMachine(properties);
+        StateMachine stateMachine = new PartitionStateMachine(properties);
 
         final RaftGroup raftGroup = RaftGroup.valueOf(RaftGroupId.valueOf(ByteString.copyFromUtf8(getRaftGroupId())),
                 getPeers());

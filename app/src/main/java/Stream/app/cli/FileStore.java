@@ -16,6 +16,7 @@ public final class FileStore {
         commands.add(new Server());
         commands.add(new LoadGen());
         commands.add(new DataStream());
+        commands.add(new Producer());
         return commands;
     }
 }

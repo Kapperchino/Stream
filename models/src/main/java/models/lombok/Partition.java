@@ -2,8 +2,9 @@ package models.lombok;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NonNull;
-import models.proto.record.RecordOuterClass;
+import models.proto.record.RecordOuterClass.Record;
 
 import java.nio.file.Paths;
 import java.util.Map;
@@ -17,6 +18,7 @@ public class Partition {
     Map<Integer, Segment> segmentMap;
     @NonNull
     Map<Integer, RecordInfo> recordInfoMap;
+    @Getter
     int partitionId;
     AtomicInteger offset;
     @NonNull
@@ -41,7 +43,7 @@ public class Partition {
         return segmentMap.get(segmentId);
     }
 
-    public void putRecordInfo(RecordOuterClass.Record record, int fileOffSet, int segmentId) {
+    public void putRecordInfo(Record record, int fileOffSet, int segmentId) {
         var id = recordInfoMap.size();
         recordInfoMap.put(id,
                 RecordInfo.builder()

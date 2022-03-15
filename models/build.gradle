@@ -64,11 +64,16 @@ protobuf {
     }
 }
 
-
-
-
-
-
+task myCopy {
+    doLast {
+        ant.replaceregexp(match: '([^\\.])com.google', replace: 'org.apache.ratis.thirdparty.com.google', flags: 'g', byline: true) {
+            fileset(dir: 'build/generated/source')
+        }
+    }
+}
+tasks.named("build") {
+    it.finalizedBy("myCopy");
+};
 //jar {
 //    from {
 //        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }

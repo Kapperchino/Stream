@@ -1,6 +1,10 @@
 package states.entity;
 
+import com.google.common.collect.ImmutableList;
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import models.lombok.dto.WriteFileMeta;
+import models.lombok.dto.WriteResultFutures;
 import org.apache.ratis.conf.ConfUtils;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.proto.ExamplesProtos.ReadReplyProto;
@@ -35,6 +39,7 @@ public class FileStore implements Closeable {
     private final ExecutorService committer;
     private final ExecutorService reader;
     private final ExecutorService deleter;
+
     public FileStore(Supplier<RaftPeerId> idSupplier, RaftProperties properties) {
         this.idSupplier = idSupplier;
         this.rootSuppliers = new ArrayList<>();
@@ -121,7 +126,7 @@ public class FileStore implements Closeable {
                     .setOffset(offset);
 
             final ByteString bytes = info.read(this::resolve, offset, length, readCommitted);
-            return reply.setData(bytes).build();
+            return reply.setData(org.apache.ratis.thirdparty.com.google.protobuf.ByteString.copyFrom(bytes.toByteArray())).build();
         }, name);
         return submit(task, reader);
     }
@@ -155,28 +160,39 @@ public class FileStore implements Closeable {
                         .build());
     }
 
-    public CompletableFuture<Integer> write(
-            long index, String relative, boolean close, boolean sync, long offset, ByteString data) {
-        final int size = data != null ? data.size() : 0;
-        log.trace("write {}, offset={}, size={}, close? {} @{}:{}",
-                relative, offset, size, close, getId(), index);
-        final boolean createNew = offset == 0L;
-        final FileInfo.UnderConstruction uc;
-        if (createNew) {
-            uc = new FileInfo.UnderConstruction(normalize(relative));
-            files.putNew(uc);
-        } else {
-            try {
-                uc = files.get(relative).asUnderConstruction();
-            } catch (FileNotFoundException e) {
-                return FileStoreCommon.completeExceptionally(
-                        index, "Failed to write to " + relative, e);
-            }
+    public WriteResultFutures write(@NonNull List<WriteFileMeta> fileList) {
+        if (fileList.isEmpty()) {
+            return null;
         }
-
-        return size == 0 && !close ? CompletableFuture.completedFuture(0)
-                : createNew ? uc.submitCreate(this::resolve, data, close, sync, writer, getId(), index)
-                : uc.submitWrite(offset, data, close, sync, writer, getId(), index);
+        var builder = WriteResultFutures.builder();
+        for (var file : fileList) {
+            var data = file.getData();
+            var relative = file.getPath();
+            var offset = file.getOffset();
+            var close = file.isClose();
+            var index = file.getIndex();
+            var sync = file.isSync();
+            final int size = data != null ? data.size() : 0;
+            log.trace("write {}, offset={}, size={}, close? {} @{}:{}",
+                    relative, offset, size, close, getId(), index);
+            final boolean createNew = offset == 0L;
+            final FileInfo.UnderConstruction uc;
+            if (createNew) {
+                uc = new FileInfo.UnderConstruction(normalize(relative));
+                files.putNew(uc);
+            } else {
+                try {
+                    uc = files.get(relative).asUnderConstruction();
+                } catch (FileNotFoundException e) {
+                    log.error("Cannot find file", e);
+                    return null;
+                }
+            }
+            builder.future(size == 0 && !close ? CompletableFuture.completedFuture(0)
+                    : createNew ? uc.submitCreate(this::resolve, data, close, sync, writer, getId(), index)
+                    : uc.submitWrite(offset, data, close, sync, writer, getId(), index));
+        }
+        return builder.build();
     }
 
     @Override

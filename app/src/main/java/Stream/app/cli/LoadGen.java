@@ -1,6 +1,7 @@
 package Stream.app.cli;
 
 import Stream.app.FileStoreClient;
+import Stream.app.ProducerClient;
 import Stream.app.cli.Client;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
@@ -48,6 +49,11 @@ public class LoadGen extends Client {
         System.out.println("Total time taken: " + (endTime - startTime) + " millis");
 
         stop(clients);
+    }
+
+    @Override
+    protected void streamOperation(List<ProducerClient> clients) throws IOException, ExecutionException, InterruptedException {
+
     }
 
     long write(FileChannel in, long offset, FileStoreClient fileStoreClient, String path,

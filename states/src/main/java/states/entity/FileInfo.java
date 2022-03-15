@@ -1,9 +1,13 @@
 package states.entity;
 
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
-import org.apache.ratis.util.*;
+import org.apache.ratis.util.JavaUtils;
+import org.apache.ratis.util.LogUtils;
+import org.apache.ratis.util.Preconditions;
+import org.apache.ratis.util.TaskQueue;
 import org.apache.ratis.util.function.CheckedFunction;
 import org.apache.ratis.util.function.CheckedSupplier;
 import states.FileStoreCommon;
@@ -14,6 +18,9 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -130,7 +137,7 @@ abstract class FileInfo {
          * A queue to make sure that the writes are in order.
          */
         private final TaskQueue writeQueue = new TaskQueue("writeQueue");
-        private final Map<Long, WriteInfo> writeInfos = new ConcurrentHashMap<>();
+        private final Map<Long, List<WriteInfo>> writeInfoMap = new ConcurrentHashMap<>();
         private final AtomicLong lastWriteIndex = new AtomicLong(-1L);
         private FileStore.FileStoreDataChannel out;
         /**
@@ -191,7 +198,10 @@ abstract class FileInfo {
             final CompletableFuture<Integer> f = writeQueue.submit(task, executor,
                     e -> new IOException("Failed " + task, e));
             final WriteInfo info = new WriteInfo(f, lastWriteIndex.getAndSet(index));
-            CollectionUtils.putNew(index, info, writeInfos, () -> id + ":writeInfos");
+            if (!writeInfoMap.containsKey(index)) {
+                writeInfoMap.put(index, Collections.synchronizedList(new ArrayList<>()));
+            }
+            writeInfoMap.get(index).add(info);
             return f;
         }
 
@@ -235,6 +245,7 @@ abstract class FileInfo {
             }
         }
 
+        @SneakyThrows
         CompletableFuture<Integer> submitCommit(
                 long offset, int size, Function<UnderConstruction, ReadOnly> closeFunction,
                 ExecutorService executor, RaftPeerId id, long index) {
@@ -242,7 +253,7 @@ abstract class FileInfo {
             final Supplier<String> name = () -> "commit(" + getRelativePath() + ", "
                     + offset + ", " + size + ", close? " + close + ") @" + id + ":" + index;
 
-            final WriteInfo info = writeInfos.get(index);
+            final WriteInfo info = writeInfoMap.get(index);
             if (info == null) {
                 return JavaUtils.completeExceptionally(
                         new IOException(name.get() + " is already committed."));
@@ -261,14 +272,14 @@ abstract class FileInfo {
 
                 if (close) {
                     ReadOnly ignored = closeFunction.apply(this);
-                    writeInfos.remove(index);
+                    writeInfoMap.remove(index);
                 }
                 info.getCommitFuture().complete(size);
                 return size;
             }, name);
 
             // Remove previous info, if there is any.
-            final WriteInfo previous = writeInfos.remove(info.getPreviousIndex());
+            final WriteInfo previous = writeInfoMap.remove(info.getPreviousIndex());
             final CompletableFuture<Integer> previousCommit = previous != null ?
                     previous.getCommitFuture() : CompletableFuture.completedFuture(0);
             // Commit after both current write and previous commit completed.

@@ -7,8 +7,13 @@ import lombok.extern.slf4j.Slf4j;
 import models.lombok.Partition;
 import models.lombok.Segment;
 import models.lombok.Topic;
+import models.lombok.dto.FileWrittenMeta;
+import models.lombok.dto.WriteFileMeta;
+import models.lombok.dto.WriteResultFutures;
 import models.proto.record.RecordListOuterClass.RecordList;
 import models.proto.record.RecordOuterClass.Record;
+import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
+import models.proto.responses.PublishResponseOuterClass.PublishResponse;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
@@ -26,12 +31,14 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 @Slf4j
 public class PartitionManager {
     Map<String, Topic> topicMap = new ConcurrentHashMap<>();
+    Map<Long, ConcurrentLinkedQueue<FileWrittenMeta>> commitMap = new ConcurrentHashMap<>();
     RaftPeerId raftPeerId;
     RaftProperties properties;
     public FileStore store;
@@ -51,7 +58,14 @@ public class PartitionManager {
                 .relativePath(Paths.get(String.format("%s/%s/0", topicName, id)))
                 .segmentId(0)
                 .build();
-        store.write(0, Paths.get(String.format("%s/%s/0", topicName, id)).toString(), true, true, 0, null);
+        var fileMeta = WriteFileMeta.builder()
+                .data(null)
+                .offset(0)
+                .path(Paths.get(String.format("%s/%s/0", topicName, id)).toString())
+                .close(true)
+                .sync(true)
+                .build();
+        store.write(ImmutableList.of(fileMeta));
         segmentMap.put(0, segment);
         if (!topicMap.containsKey(topicName)) {
             log.info("Creating topic {}", topicName);
@@ -71,7 +85,7 @@ public class PartitionManager {
     }
 
     @SneakyThrows
-    public CompletableFuture<Integer> writeToPartition(long index, String topicName, int id, List<Record> records) {
+    public CompletableFuture<WriteResultFutures> writeToPartition(long index, String topicName, int id, List<Record> records) {
         if (Strings.isNullOrEmpty(topicName) || store == null) {
             throw new NullPointerException();
         }
@@ -81,49 +95,84 @@ public class PartitionManager {
         var partition = getPartition(topicName, id);
         var segment = partition.getLastSegment();
         var curSegFileLeft = Config.MAX_SIZE_PER_SEG - partition.getLastRecord().getFileOffset();
-        int offset = partition.getLastRecord().getFileOffset();
+        int startingOffset = 0;
+        var commitQueue = new ConcurrentLinkedQueue<FileWrittenMeta>();
+        commitMap.put(index, commitQueue);
 
         if (partition.getLastRecord() == null) {
             curSegFileLeft = Config.MAX_SIZE_PER_SEG;
-            offset = 0;
+        } else {
+            startingOffset = partition.getLastRecord().getFileOffset();
         }
 
         ByteBuffer buffer = ByteBuffer.allocate(Config.MAX_SIZE_PER_SEG);
+        var offset = startingOffset;
         //write to cur file
         int i = 0;
         while (i < records.size() && records.get(i).getSerializedSize() < curSegFileLeft) {
-            var curRec = records.get(i);
+            Record curRec = records.get(i);
             buffer.put(curRec.toByteArray());
             partition.putRecordInfo(curRec, offset, segment.getSegmentId());
             curSegFileLeft -= curRec.getSerializedSize();
+            offset += curRec.getSerializedSize();
             i++;
         }
+        boolean shouldClose = i >= records.size() - 1;
+        var writeFile = WriteFileMeta.builder()
+                .index((int) index)
+                .path(segment.getRelativePath().toString())
+                .close(shouldClose)
+                .sync(true)
+                .offset(startingOffset)
+                .data(ByteString.copyFrom(buffer))
+                .build();
+        var fileMeta = writeFile.getFileWritten();
+        commitQueue.offer(fileMeta);
         var f = store
-                .write(index, segment.getRelativePath().toString(), true, true, 0, ByteString.copyFrom(buffer));
+                .write(ImmutableList.of(writeFile));
 
-        //write to file
+        //Everything written to first file, and no other files
         if (i >= records.size() - 1) {
-            return f;
+            return CompletableFuture.supplyAsync(() -> f);
         }
+
         //iterate through other records
         buffer.clear();
-        var builder = ImmutableList.<CompletableFuture<Integer>>builder();
+        var builder = ImmutableList.<WriteFileMeta>builder();
         for (int x = i; i < records.size(); x++) {
-            segment = partition.addSegment();
             //fill the buffer up
-            while (buffer.position() + records.get(x).getSerializedSize() < Config.MAX_SIZE_PER_SEG) {
+            startingOffset = offset;
+            while (offset + records.get(x).getSerializedSize() < Config.MAX_SIZE_PER_SEG) {
                 buffer.put(records.get(x).toByteArray());
                 partition.putRecordInfo(records.get(x), offset, segment.getSegmentId());
+                offset += records.get(x).getSerializedSize();
                 x++;
             }
-            builder.add(store.write(index, segment.getRelativePath().toString(), false, true, 0, ByteString.copyFrom(buffer)));
+            writeFile = WriteFileMeta.builder()
+                    .index((int) index)
+                    .path(segment.getRelativePath().toString())
+                    .close(true)
+                    .sync(true)
+                    .offset(startingOffset)
+                    .data(ByteString.copyFrom(buffer))
+                    .build();
+            fileMeta = writeFile.getFileWritten();
+            commitQueue.offer(fileMeta);
+            builder.add(writeFile);
+            segment = partition.addSegment();
+            offset = 0;
             buffer.clear();
         }
         var list = builder.build();
-        for(var future : list){
-            f = f.thenCompose((a) -> future);
+        var res = store.write(list);
+        return CompletableFuture.supplyAsync(() -> f);
+    }
+
+    public CompletableFuture<PublishResponse> submitCommit(long index, PublishRequestHeader header, int size) {
+        if (!commitMap.containsKey(index)) {
+            return null;
         }
-        return f;
+        var queue = commitMap.get(index);
     }
 
     @SneakyThrows

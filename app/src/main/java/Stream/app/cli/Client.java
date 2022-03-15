@@ -1,6 +1,7 @@
 package Stream.app.cli;
 
 import Stream.app.FileStoreClient;
+import Stream.app.ProducerClient;
 import com.beust.jcommander.Parameter;
 import org.apache.ratis.RaftConfigKeys;
 import org.apache.ratis.client.RaftClient;
@@ -91,7 +92,7 @@ public abstract class Client extends SubCommandBase {
             FileUtils.createDirectories(dir);
         }
 
-        operation(getClients(raftProperties));
+        streamOperation(getProducerClients(raftProperties));
     }
 
     public List<FileStoreClient> getClients(RaftProperties raftProperties) {
@@ -114,8 +115,35 @@ public abstract class Client extends SubCommandBase {
         return fileStoreClients;
     }
 
+    public List<ProducerClient> getProducerClients(RaftProperties raftProperties) {
+        List<ProducerClient> producerClients = new ArrayList<>();
+        for (int i = 0; i < numClients; i++) {
+            final RaftGroup raftGroup = RaftGroup.valueOf(RaftGroupId.valueOf(ByteString.copyFromUtf8(getRaftGroupId())),
+                    getPeers());
+
+            RaftClient.Builder builder =
+                    RaftClient.newBuilder().setProperties(raftProperties);
+            builder.setRaftGroup(raftGroup);
+            builder.setClientRpc(
+                    new GrpcFactory(new org.apache.ratis.conf.Parameters())
+                            .newRaftClientRpc(ClientId.randomId(), raftProperties));
+            RaftPeer[] peers = getPeers();
+            builder.setPrimaryDataStreamServer(peers[0]);
+            RaftClient client = builder.build();
+            producerClients.add(new ProducerClient(client));
+        }
+        return producerClients;
+    }
+
     protected void stop(List<FileStoreClient> clients) throws IOException {
         for (FileStoreClient client : clients) {
+            client.close();
+        }
+        System.exit(0);
+    }
+
+    protected void stopProducers(List<ProducerClient> clients) throws IOException {
+        for (ProducerClient client : clients) {
             client.close();
         }
         System.exit(0);
@@ -186,5 +214,8 @@ public abstract class Client extends SubCommandBase {
     }
 
     protected abstract void operation(List<FileStoreClient> clients)
+            throws IOException, ExecutionException, InterruptedException;
+
+    protected abstract void streamOperation(List<ProducerClient> clients)
             throws IOException, ExecutionException, InterruptedException;
 }

@@ -1,6 +1,7 @@
 package Stream.app.cli;
 
 import Stream.app.FileStoreClient;
+import Stream.app.ProducerClient;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 import org.apache.ratis.client.api.DataStreamOutput;
@@ -86,6 +87,11 @@ public class DataStream extends Client {
         System.out.println("Total time taken: " + (endTime - startTime) + " millis");
 
         stop(clients);
+    }
+
+    @Override
+    protected void streamOperation(List<ProducerClient> clients) throws IOException, ExecutionException, InterruptedException {
+
     }
 
     private Map<String, CompletableFuture<List<CompletableFuture<DataStreamReply>>>> streamWrite(
