@@ -96,7 +96,7 @@ public class ProducerClient implements Closeable {
                 .setData(requestData)
                 .build();
 
-        return sendFunction.apply(ByteString.copyFrom(request.toByteArray()));
+        return sendFunction.apply(request.toByteString());
     }
 
     @Override

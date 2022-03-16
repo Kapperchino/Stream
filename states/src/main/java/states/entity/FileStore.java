@@ -124,7 +124,7 @@ public class FileStore implements Closeable {
                     .setOffset(offset);
 
             final ByteString bytes = info.read(this::resolve, offset, length, readCommitted);
-            return reply.setData(com.google.protobuf.ByteString.copyFrom(bytes.toByteArray())).build();
+            return reply.setData(bytes).build();
         }, name);
         return submit(task, reader);
     }
