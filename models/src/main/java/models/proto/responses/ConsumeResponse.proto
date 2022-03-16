@@ -1,6 +1,7 @@
 syntax = "proto3";
-option java_package = "models.proto.responses";
+
 import "Record.proto";
+option java_package = "models.proto.responses";
 option java_generate_equals_and_hash = true;
 
 message ConsumeResponse {

@@ -1,7 +1,8 @@
 syntax = "proto3";
-option java_package = "models.proto.record";
 option java_generate_equals_and_hash = true;
 import "Record.proto";
+option java_package = "models.proto.record";
+
 
 message RecordResult {
   Record record = 1;

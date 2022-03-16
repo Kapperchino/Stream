@@ -3,7 +3,7 @@ package states.entity;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.protocol.RaftPeerId;
-import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
+import com.google.protobuf.ByteString;
 import org.apache.ratis.util.JavaUtils;
 import org.apache.ratis.util.LogUtils;
 import org.apache.ratis.util.Preconditions;
@@ -18,9 +18,6 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -137,7 +134,7 @@ abstract class FileInfo {
          * A queue to make sure that the writes are in order.
          */
         private final TaskQueue writeQueue = new TaskQueue("writeQueue");
-        private final Map<Long, List<WriteInfo>> writeInfoMap = new ConcurrentHashMap<>();
+        private final Map<Long, WriteInfo> writeInfoMap = new ConcurrentHashMap<>();
         private final AtomicLong lastWriteIndex = new AtomicLong(-1L);
         private FileStore.FileStoreDataChannel out;
         /**
@@ -198,10 +195,7 @@ abstract class FileInfo {
             final CompletableFuture<Integer> f = writeQueue.submit(task, executor,
                     e -> new IOException("Failed " + task, e));
             final WriteInfo info = new WriteInfo(f, lastWriteIndex.getAndSet(index));
-            if (!writeInfoMap.containsKey(index)) {
-                writeInfoMap.put(index, Collections.synchronizedList(new ArrayList<>()));
-            }
-            writeInfoMap.get(index).add(info);
+            writeInfoMap.put(index, info);
             return f;
         }
 

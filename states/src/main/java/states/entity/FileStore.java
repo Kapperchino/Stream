@@ -1,6 +1,6 @@
 package states.entity;
 
-import com.google.common.collect.ImmutableList;
+import com.google.protobuf.ByteString;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import models.lombok.dto.WriteFileMeta;
@@ -9,11 +9,9 @@ import org.apache.ratis.conf.ConfUtils;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.proto.ExamplesProtos.ReadReplyProto;
 import org.apache.ratis.proto.ExamplesProtos.StreamWriteReplyProto;
-import org.apache.ratis.proto.ExamplesProtos.WriteReplyProto;
 import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.statemachine.StateMachine;
 import org.apache.ratis.statemachine.StateMachine.DataStream;
-import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.util.*;
 import org.apache.ratis.util.function.CheckedSupplier;
 import states.FileStoreCommon;
@@ -126,7 +124,7 @@ public class FileStore implements Closeable {
                     .setOffset(offset);
 
             final ByteString bytes = info.read(this::resolve, offset, length, readCommitted);
-            return reply.setData(org.apache.ratis.thirdparty.com.google.protobuf.ByteString.copyFrom(bytes.toByteArray())).build();
+            return reply.setData(com.google.protobuf.ByteString.copyFrom(bytes.toByteArray())).build();
         }, name);
         return submit(task, reader);
     }
@@ -141,7 +139,7 @@ public class FileStore implements Closeable {
         return submit(task, deleter);
     }
 
-    public CompletableFuture<WriteReplyProto> submitCommit(
+    public CompletableFuture<Integer> submitCommit(
             long index, String relative, boolean close, long offset, int size) {
         final Function<FileInfo.UnderConstruction, FileInfo.ReadOnly> converter = close ? files::close : null;
         final FileInfo.UnderConstruction uc;
@@ -151,13 +149,7 @@ public class FileStore implements Closeable {
             return FileStoreCommon.completeExceptionally(
                     index, "Failed to write to " + relative, e);
         }
-
-        return uc.submitCommit(offset, size, converter, committer, getId(), index)
-                .thenApply(n -> WriteReplyProto.newBuilder()
-                        .setResolvedPath(FileStoreCommon.toByteString(uc.getRelativePath()))
-                        .setOffset(offset)
-                        .setLength(n)
-                        .build());
+        return uc.submitCommit(offset, size, converter, committer, getId(), index);
     }
 
     public WriteResultFutures write(@NonNull List<WriteFileMeta> fileList) {

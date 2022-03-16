@@ -2,7 +2,7 @@ package models.lombok.dto;
 
 import lombok.Builder;
 import lombok.Value;
-import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
+import com.google.protobuf.ByteString;
 
 @Value
 @Builder

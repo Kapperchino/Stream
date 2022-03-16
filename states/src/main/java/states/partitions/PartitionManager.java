@@ -16,7 +16,7 @@ import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader
 import models.proto.responses.PublishResponseOuterClass.PublishResponse;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.protocol.RaftPeerId;
-import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
+import com.google.protobuf.ByteString;
 import states.FileStoreCommon;
 import states.config.Config;
 import states.entity.FileStore;
@@ -168,11 +168,20 @@ public class PartitionManager {
         return CompletableFuture.supplyAsync(() -> f);
     }
 
+    //handle errors
     public CompletableFuture<PublishResponse> submitCommit(long index, PublishRequestHeader header, int size) {
         if (!commitMap.containsKey(index)) {
             return null;
         }
         var queue = commitMap.get(index);
+        var builder = ImmutableList.<CompletableFuture<Integer>>builder();
+        while (!queue.isEmpty()) {
+            var meta = queue.poll();
+            builder.add(store.submitCommit(index, meta.getPath(), meta.isClose(), meta.getOffset(), size));
+        }
+        var list = builder.build();
+        var future = CompletableFuture.allOf(list.toArray(new CompletableFuture[0]));
+        return null;
     }
 
     @SneakyThrows

@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NonNull;
+import models.proto.record.RecordOuterClass;
 import models.proto.record.RecordOuterClass.Record;
 
 import java.nio.file.Paths;

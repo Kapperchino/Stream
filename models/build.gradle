@@ -6,6 +6,7 @@ plugins {
     id "com.google.protobuf" version "0.8.18"
     id "java"
     id "io.freefair.lombok" version "6.4.1"
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
 }
 
 repositories {
@@ -16,7 +17,6 @@ dependencies {
     implementation 'org.projectlombok:lombok:1.18.20'
     implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.19.4'
     implementation group: 'com.google.protobuf', name: 'protobuf-java-util', version: '3.19.4'
-
     implementation 'com.google.protobuf:protobuf-gradle-plugin:0.8.18'
     testImplementation group: 'junit', name: 'junit', version: '4.12'
 }
@@ -24,22 +24,15 @@ dependencies {
 sourceSets {
     main {
         java {
-            srcDirs 'src/main/java/models/proto/record'
-            srcDirs 'src/main/java/models/proto/requests'
-            srcDirs 'src/main/java/models/proto/responses'
+            srcDirs 'build/generated'
         }
         proto {
             srcDirs 'src/main/java/models/proto/record'
             srcDirs 'src/main/java/models/proto/requests'
             srcDirs 'src/main/java/models/proto/responses'
             include '**/*.protodevel'
-
         }
     }
-}
-
-clean {
-    delete protobuf.generatedFilesBaseDir
 }
 
 protobuf {
@@ -64,23 +57,7 @@ protobuf {
     }
 }
 
-task myCopy {
-    doLast {
-        ant.replaceregexp(match: '([^\\.])com.google', replace: 'org.apache.ratis.thirdparty.com.google', flags: 'g', byline: true) {
-            fileset(dir: 'build/generated/source')
-        }
-    }
+
+clean {
+    delete protobuf.generatedFilesBaseDir
 }
-tasks.named("build") {
-    it.finalizedBy("myCopy");
-};
-//jar {
-//    from {
-//        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
-//    }
-//    manifest {
-//        attributes (
-//                'Main-Class': 'Stream.app.Runner'
-//        )
-//    }
-//}

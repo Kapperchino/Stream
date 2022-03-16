@@ -1,8 +1,10 @@
 package states.state;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
+import models.lombok.dto.WriteResultFutures;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
-import models.proto.requests.PublishRequestOuterClass.PublishRequest;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.proto.ExamplesProtos.*;
 import org.apache.ratis.proto.RaftProtos.LogEntryProto;
@@ -16,8 +18,7 @@ import org.apache.ratis.statemachine.StateMachineStorage;
 import org.apache.ratis.statemachine.TransactionContext;
 import org.apache.ratis.statemachine.impl.BaseStateMachine;
 import org.apache.ratis.statemachine.impl.SimpleStateMachineStorage;
-import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
-import org.apache.ratis.thirdparty.com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.ByteString;
 import org.apache.ratis.util.FileUtils;
 import states.FileStoreCommon;
 import states.entity.FileStore;
@@ -27,6 +28,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 
+import static models.proto.requests.PublishRequestOuterClass.*;
+
+@Slf4j
 public class PartitionStateMachine extends BaseStateMachine {
     private final SimpleStateMachineStorage storage = new SimpleStateMachineStorage();
 
@@ -88,7 +92,7 @@ public class PartitionStateMachine extends BaseStateMachine {
     }
 
     @Override
-    public CompletableFuture<Integer> write(LogEntryProto entry) {
+    public CompletableFuture<WriteResultFutures> write(LogEntryProto entry) {
         final StateMachineLogEntryProto smLog = entry.getStateMachineLogEntry();
         final ByteString data = smLog.getLogData();
         final PublishRequest proto;
@@ -141,7 +145,7 @@ public class PartitionStateMachine extends BaseStateMachine {
 
     @Override
     public CompletableFuture<?> link(DataStream stream, LogEntryProto entry) {
-        LOG.info("linking {}", stream);
+        log.info("linking {}", stream);
         return files.streamLink(stream);
     }
 

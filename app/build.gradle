@@ -5,6 +5,7 @@
 plugins {
     id 'Stream.java-application-conventions'
     id "io.freefair.lombok" version "6.3.0"
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
 }
 
 repositories {
@@ -12,20 +13,12 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.apache.commons:commons-text'
-    implementation project(':utilities')
-    implementation project(':states')
-    implementation project(':models')
-    implementation 'org.apache.ratis:ratis:2.+'
-    implementation 'ch.qos.logback:logback-classic:1.2.5'
-    implementation 'org.apache.ratis:ratis-server:2.+'
-    implementation 'org.apache.ratis:ratis-grpc:2.2.+'
-    implementation 'org.apache.ratis:ratis-netty:2.2.+'
-    implementation 'com.google.guava:guava:31.0.1-jre'
-    implementation 'com.google.dagger:dagger:2.+'
+    implementation project(path: ':utilities')
+    implementation project(path: ':states')
+    implementation project(path: ':dep', configuration: 'shadow')
+    implementation project(path: ':models', configuration: 'shadow')
     implementation 'com.beust:jcommander:1.82'
-    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.19.4'
-    implementation group: 'com.google.protobuf', name: 'protobuf-java-util', version: '3.19.4'
+    implementation 'ch.qos.logback:logback-classic:1.2.5'
 }
 
 application {
