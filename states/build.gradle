@@ -10,6 +10,5 @@ plugins {
 dependencies {
     implementation project(path: ':models', configuration: 'shadow')
     implementation project(path: ':dep', configuration: 'shadow')
-    implementation 'ch.qos.logback:logback-classic:1.2.5'
 }
 // Configure Auto Relocation

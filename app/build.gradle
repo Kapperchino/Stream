@@ -17,8 +17,6 @@ dependencies {
     implementation project(path: ':states')
     implementation project(path: ':dep', configuration: 'shadow')
     implementation project(path: ':models', configuration: 'shadow')
-    implementation 'com.beust:jcommander:1.82'
-    implementation 'ch.qos.logback:logback-classic:1.2.5'
 }
 
 application {

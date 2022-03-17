@@ -20,13 +20,11 @@ dependencies {
     implementation 'com.google.dagger:dagger:2.+'
     implementation 'org.apache.commons:commons-text:1.9'
     implementation 'com.beust:jcommander:1.82'
+    implementation 'io.dropwizard.metrics:metrics-core:3.2.5'
+    implementation 'ch.qos.logback:logback-classic:1.2.5'
 }
 
 shadowJar {
-    dependencies{
-        include(dependency {
-            it.moduleGroup.contains('org.apache.ratis')
-        })
-    }
     relocate 'org.apache.ratis.thirdparty.com.google', 'com.google'
+    relocate 'org.apache.ratis.thirdparty.io.opencensus', 'io.opencensus'
 }
