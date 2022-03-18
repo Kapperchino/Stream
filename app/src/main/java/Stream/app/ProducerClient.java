@@ -3,9 +3,11 @@ package Stream.app;
 import com.google.protobuf.ByteString;
 import lombok.extern.slf4j.Slf4j;
 import models.proto.record.RecordOuterClass.Record;
+import models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
 import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
 import models.proto.requests.PublishRequestOuterClass.PublishRequest;
+import models.proto.requests.WriteRequestOuterClass.WriteRequest;
 import models.proto.responses.PublishResponseOuterClass.PublishResponse;
 import org.apache.ratis.client.RaftClient;
 import org.apache.ratis.conf.RaftProperties;
@@ -91,9 +93,30 @@ public class ProducerClient implements Closeable {
         final var requestData = PublishRequestData.newBuilder()
                 .addAllData(data);
 
-        final var request = PublishRequest.newBuilder()
+        final var publishRequest = PublishRequest.newBuilder()
                 .setHeader(header)
                 .setData(requestData)
+                .build();
+
+        final var request = WriteRequest.newBuilder()
+                .setPublish(publishRequest)
+                .build();
+
+        return sendFunction.apply(request.toByteString());
+    }
+
+    private static <OUTPUT, THROWABLE extends Throwable> OUTPUT addPartitionImpl(
+            CheckedFunction<ByteString, OUTPUT, THROWABLE> sendFunction,
+            String topic, long partitionId)
+            throws THROWABLE {
+
+        final var addRequest = AddPartitionRequest.newBuilder()
+                .setPartition(partitionId)
+                .setTopic(topic)
+                .build();
+
+        final var request = WriteRequest.newBuilder()
+                .setAddPartition(addRequest)
                 .build();
 
         return sendFunction.apply(request.toByteString());
@@ -123,6 +146,12 @@ public class ProducerClient implements Closeable {
     public PublishResponse publish(String key, List<Record> data, String topic)
             throws IOException {
         final ByteString reply = publishImpl(this::send, key, data, topic);
+        return PublishResponse.parseFrom(reply.toByteArray());
+    }
+
+    public PublishResponse addPartition(String topic, long partition)
+            throws IOException {
+        final ByteString reply = addPartitionImpl(this::send, topic, partition);
         return PublishResponse.parseFrom(reply.toByteArray());
     }
 

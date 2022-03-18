@@ -10,6 +10,12 @@ repositories {
     mavenCentral()
 }
 
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(11))
+    }
+}
+
 dependencies {
     implementation 'org.apache.ratis:ratis:2.+'
     implementation 'org.apache.ratis:ratis-server:2.+'
@@ -27,4 +33,6 @@ dependencies {
 shadowJar {
     relocate 'org.apache.ratis.thirdparty.com.google', 'com.google'
     relocate 'org.apache.ratis.thirdparty.io.opencensus', 'io.opencensus'
+    relocate 'org.apache.ratis.thirdparty.io.grpc', 'io.grpc'
+    relocate 'org.apache.ratis.thirdparty.io.netty', 'io.netty'
 }

@@ -12,8 +12,8 @@ import models.lombok.dto.FileWrittenMeta;
 import models.lombok.dto.WriteFileMeta;
 import models.lombok.dto.WriteResultFutures;
 import models.proto.record.RecordListOuterClass.RecordList;
+import models.proto.record.RecordMetaOuterClass.RecordMeta;
 import models.proto.record.RecordOuterClass.Record;
-import models.proto.requests.AddPartitionRequestOuterClass;
 import models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
 import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
@@ -71,7 +71,7 @@ public class PartitionManager {
                 .data(null)
                 .offset(0)
                 .path(Paths.get(String.format("%s/%s/0", topicName, id)).toString())
-                .close(true)
+                .close(false)
                 .sync(true)
                 .build();
         store.write(ImmutableList.of(fileMeta));
@@ -131,12 +131,12 @@ public class PartitionManager {
         var writeFile = WriteFileMeta.builder()
                 .index((int) index)
                 .path(segment.getRelativePath().toString())
-                .close(shouldClose)
+                .close(false)
                 .sync(true)
                 .offset(startingOffset)
                 .data(ByteString.copyFrom(buffer))
                 .build();
-        var fileMeta = writeFile.getFileWritten();
+        var fileMeta = writeFile.getFileWritten(buffer.position());
         commitQueue.offer(fileMeta);
         var f = store
                 .write(ImmutableList.of(writeFile));
@@ -161,12 +161,12 @@ public class PartitionManager {
             writeFile = WriteFileMeta.builder()
                     .index((int) index)
                     .path(segment.getRelativePath().toString())
-                    .close(true)
+                    .close(false)
                     .sync(true)
                     .offset(startingOffset)
                     .data(ByteString.copyFrom(buffer))
                     .build();
-            fileMeta = writeFile.getFileWritten();
+            fileMeta = writeFile.getFileWritten(buffer.position());
             commitQueue.offer(fileMeta);
             builder.add(writeFile);
             segment = partition.addSegment();
@@ -179,11 +179,6 @@ public class PartitionManager {
     }
 
     public CompletableFuture<AddPartitionResponse> submitAddPartition(long index, AddPartitionRequest request) {
-        return null;
-    }
-
-    //handle errors
-    public CompletableFuture<PublishResponse> submitCommit(long index, PublishRequestHeader header, int size) {
         if (!commitMap.containsKey(index)) {
             return null;
         }
@@ -191,11 +186,39 @@ public class PartitionManager {
         var builder = ImmutableList.<CompletableFuture<Integer>>builder();
         while (!queue.isEmpty()) {
             var meta = queue.poll();
-            builder.add(store.submitCommit(index, meta.getPath(), meta.isClose(), meta.getOffset(), size));
+            builder.add(store.submitCommit(index, meta.getPath(), meta.isClose(), meta.getOffset(), (int) meta.getSize()));
         }
         var list = builder.build();
         var future = CompletableFuture.allOf(list.toArray(new CompletableFuture[0]));
-        return null;
+        return future.thenApply((a) ->
+                AddPartitionResponse.newBuilder().setTopic(request.getTopic()).setPartitionId(request.getPartition()).build()
+        );
+    }
+
+    //TODO: handle errors
+    public CompletableFuture<PublishResponse> submitCommit(long index, PublishRequestHeader header, PublishRequestData data) {
+        if (!commitMap.containsKey(index)) {
+            return null;
+        }
+        var queue = commitMap.get(index);
+        var builder = ImmutableList.<CompletableFuture<Integer>>builder();
+        while (!queue.isEmpty()) {
+            var meta = queue.poll();
+            builder.add(store.submitCommit(index, meta.getPath(), meta.isClose(), meta.getOffset(), (int) meta.getSize()));
+        }
+        var list = builder.build();
+        var future = CompletableFuture.allOf(list.toArray(new CompletableFuture[0]));
+        //TODO: get offset from map
+        return future.thenApply((a) -> {
+            var response = PublishResponse.newBuilder();
+            for (var record : data.getDataList()) {
+                response.addData(RecordMeta.newBuilder()
+                        .setKey(record.getKey())
+                        .setOffset(0)
+                        .setTopic(record.getTopic()));
+            }
+            return response.build();
+        });
     }
 
     @SneakyThrows

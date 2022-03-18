@@ -2,7 +2,6 @@ package states.state;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
 import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
@@ -81,6 +80,7 @@ public class PartitionStateMachine extends BaseStateMachine {
 
     @Override
     public TransactionContext startTransaction(RaftClientRequest request) throws IOException {
+        log.info("incoming transactiono: {}", request);
         final ByteString content = request.getMessage().getContent();
         final var proto = WriteRequest.parseFrom(content.toByteArray());
         final TransactionContext.Builder b = TransactionContext.newBuilder()
@@ -97,7 +97,6 @@ public class PartitionStateMachine extends BaseStateMachine {
         return b.build();
     }
 
-    @SneakyThrows
     @Override
     public CompletableFuture<?> write(LogEntryProto entry) {
         final StateMachineLogEntryProto smLog = entry.getStateMachineLogEntry();
@@ -113,7 +112,13 @@ public class PartitionStateMachine extends BaseStateMachine {
             case PUBLISH:
                 var publishReq = proto.getPublish();
                 var machineData = smLog.getStateMachineEntry().getStateMachineData();
-                var publishData = PublishRequestData.parseFrom(machineData);
+                PublishRequestData publishData = null;
+                try {
+                    publishData = PublishRequestData.parseFrom(machineData);
+                } catch (InvalidProtocolBufferException e) {
+                    return FileStoreCommon.completeExceptionally(
+                            entry.getIndex(), "Failed to parse data, entry=" + entry, e);
+                }
                 return partitionManager.writeToPartition(entry.getIndex(), publishReq.getHeader().getTopic(), 0, publishData);
             case ADDPARTITION:
                 var addPartitionReq = proto.getAddPartition();
@@ -170,7 +175,6 @@ public class PartitionStateMachine extends BaseStateMachine {
         return files.streamLink(stream);
     }
 
-    @SneakyThrows
     @Override
     public CompletableFuture<Message> applyTransaction(TransactionContext trx) {
         final LogEntryProto entry = trx.getLogEntry();
@@ -190,27 +194,38 @@ public class PartitionStateMachine extends BaseStateMachine {
         switch (request.getRequestCase()) {
             case PUBLISH:
                 //add size calculation later
-                return writeCommit(index, request.getPublish().getHeader(), 100);
+                return writeCommit(index, request.getPublish().getHeader(), request.getPublish().getData());
             case ADDPARTITION:
                 return addPartitionCommit(index, request.getAddPartition());
             case CREATETOPIC:
                 break;
             default:
-                break;
+                LOG.error(getId() + ": Unexpected request case " + request.getRequestCase());
+                return FileStoreCommon.completeExceptionally(index,
+                        "Unexpected request case " + request.getRequestCase());
+        }
+        return FileStoreCommon.completeExceptionally(index,
+                "Unexpected request case " + request.getRequestCase());
+    }
+
+
+    private CompletableFuture<Message> writeCommit(
+            long index, PublishRequestHeader header, PublishRequestData data) {
+        var f1 = partitionManager
+                .submitCommit(index, header, data);
+        if (f1 != null) {
+            return f1.thenApply(reply -> Message.valueOf(reply.toByteString()));
         }
         return null;
     }
 
-    private CompletableFuture<Message> writeCommit(
-            long index, PublishRequestHeader header, int size) {
-        return partitionManager.submitCommit(index, header, size)
-                .thenApply(reply -> Message.valueOf(reply.toByteString()));
-    }
-
     private CompletableFuture<Message> addPartitionCommit(
             long index, AddPartitionRequest request) {
-        return partitionManager.submitAddPartition(index, request)
-                .thenApply(reply -> Message.valueOf(reply.toByteString()));
+        var f1 = partitionManager.submitAddPartition(index, request);
+        if (f1 != null) {
+            return f1.thenApply(reply -> Message.valueOf(reply.toByteString()));
+        }
+        return null;
     }
 
     private CompletableFuture<Message> streamCommit(StreamWriteRequestProto stream) {

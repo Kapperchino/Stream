@@ -1,8 +1,8 @@
 package models.lombok.dto;
 
+import com.google.protobuf.ByteString;
 import lombok.Builder;
 import lombok.Value;
-import com.google.protobuf.ByteString;
 
 @Value
 @Builder
@@ -21,6 +21,17 @@ public class WriteFileMeta {
                 .close(close)
                 .sync(sync)
                 .offset(offset)
+                .build();
+    }
+
+    public FileWrittenMeta getFileWritten(long size) {
+        return FileWrittenMeta.builder()
+                .index(index)
+                .path(path)
+                .close(close)
+                .sync(sync)
+                .offset(offset)
+                .size(size)
                 .build();
     }
 }

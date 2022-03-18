@@ -7,6 +7,12 @@ plugins {
     id "io.freefair.lombok" version "6.3.0"
 }
 
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(11))
+    }
+}
+
 dependencies {
     implementation project(path: ':models', configuration: 'shadow')
     implementation project(path: ':dep', configuration: 'shadow')

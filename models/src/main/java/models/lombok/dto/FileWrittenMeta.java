@@ -12,4 +12,5 @@ public class FileWrittenMeta {
     boolean close;
     boolean sync;
     long offset;
+    long size;
 }
