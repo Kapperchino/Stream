@@ -1,10 +1,13 @@
 package states.state;
 
+import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import models.lombok.dto.WriteResultFutures;
+import models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
+import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
+import models.proto.requests.WriteRequestOuterClass.WriteRequest;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.proto.ExamplesProtos.*;
 import org.apache.ratis.proto.RaftProtos.LogEntryProto;
@@ -18,7 +21,6 @@ import org.apache.ratis.statemachine.StateMachineStorage;
 import org.apache.ratis.statemachine.TransactionContext;
 import org.apache.ratis.statemachine.impl.BaseStateMachine;
 import org.apache.ratis.statemachine.impl.SimpleStateMachineStorage;
-import com.google.protobuf.ByteString;
 import org.apache.ratis.util.FileUtils;
 import states.FileStoreCommon;
 import states.entity.FileStore;
@@ -28,7 +30,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 
-import static models.proto.requests.PublishRequestOuterClass.*;
+import static models.proto.requests.PublishRequestOuterClass.PublishRequest;
 
 @Slf4j
 public class PartitionStateMachine extends BaseStateMachine {
@@ -46,7 +48,6 @@ public class PartitionStateMachine extends BaseStateMachine {
     public void initialize(RaftServer server, RaftGroupId groupId, RaftStorage raftStorage)
             throws IOException {
         super.initialize(server, groupId, raftStorage);
-        this.partitionManager.createPartition("Test", 0);
         this.storage.init(raftStorage);
         for (Path path : files.getRoots()) {
             FileUtils.createDirectories(path);
@@ -81,29 +82,49 @@ public class PartitionStateMachine extends BaseStateMachine {
     @Override
     public TransactionContext startTransaction(RaftClientRequest request) throws IOException {
         final ByteString content = request.getMessage().getContent();
-        final PublishRequest proto = PublishRequest.parseFrom(content.toByteArray());
+        final var proto = WriteRequest.parseFrom(content.toByteArray());
         final TransactionContext.Builder b = TransactionContext.newBuilder()
                 .setStateMachine(this)
                 .setClientRequest(request);
-        final PublishRequest newProto = PublishRequest.newBuilder()
-                .setHeader(proto.getHeader()).build();
-        b.setLogData(ByteString.copyFrom(newProto.toByteArray())).setStateMachineData(ByteString.copyFrom(proto.getData().toByteArray()));
+        if (proto.getRequestCase() == WriteRequest.RequestCase.PUBLISH) {
+            var publishProto = proto.getPublish();
+            final WriteRequest newProto = WriteRequest.newBuilder()
+                    .setPublish(PublishRequest.newBuilder().setHeader(publishProto.getHeader())).build();
+            b.setLogData(ByteString.copyFrom(newProto.toByteArray())).setStateMachineData(ByteString.copyFrom(publishProto.getData().toByteArray()));
+        } else {
+            b.setLogData(content);
+        }
         return b.build();
     }
 
+    @SneakyThrows
     @Override
-    public CompletableFuture<WriteResultFutures> write(LogEntryProto entry) {
+    public CompletableFuture<?> write(LogEntryProto entry) {
         final StateMachineLogEntryProto smLog = entry.getStateMachineLogEntry();
         final ByteString data = smLog.getLogData();
-        final PublishRequest proto;
+        final WriteRequest proto;
         try {
-            proto = PublishRequest.parseFrom(data.toByteArray());
+            proto = WriteRequest.parseFrom(data.toByteArray());
         } catch (Exception e) {
             return FileStoreCommon.completeExceptionally(
                     entry.getIndex(), "Failed to parse data, entry=" + entry, e);
         }
-        var header = proto.getHeader();
-        return partitionManager.writeToPartition(entry.getIndex(), header.getTopic(), 0, proto.getData().getDataList());
+        switch (proto.getRequestCase()) {
+            case PUBLISH:
+                var publishReq = proto.getPublish();
+                var machineData = smLog.getStateMachineEntry().getStateMachineData();
+                var publishData = PublishRequestData.parseFrom(machineData);
+                return partitionManager.writeToPartition(entry.getIndex(), publishReq.getHeader().getTopic(), 0, publishData);
+            case ADDPARTITION:
+                var addPartitionReq = proto.getAddPartition();
+                return partitionManager.createPartition(addPartitionReq.getTopic(), addPartitionReq.getPartition());
+            case CREATETOPIC:
+                //not needed for now
+                break;
+            default:
+                break;
+        }
+        return null;
         // sync only if closing the file
     }
 
@@ -158,14 +179,37 @@ public class PartitionStateMachine extends BaseStateMachine {
         updateLastAppliedTermIndex(entry.getTerm(), index);
 
         final StateMachineLogEntryProto smLog = entry.getStateMachineLogEntry();
-        final PublishRequest request;
-        request = PublishRequest.parseFrom(smLog.getLogData());
-        return writeCommit(index, request.getHeader(), smLog.getStateMachineEntry().getStateMachineData().size());
+        final WriteRequest request;
+        try {
+            request = WriteRequest.parseFrom(smLog.getLogData());
+        } catch (InvalidProtocolBufferException e) {
+            return FileStoreCommon.completeExceptionally(index,
+                    "Failed to parse logData in" + smLog, e);
+        }
+
+        switch (request.getRequestCase()) {
+            case PUBLISH:
+                //add size calculation later
+                return writeCommit(index, request.getPublish().getHeader(), 100);
+            case ADDPARTITION:
+                return addPartitionCommit(index, request.getAddPartition());
+            case CREATETOPIC:
+                break;
+            default:
+                break;
+        }
+        return null;
     }
 
     private CompletableFuture<Message> writeCommit(
             long index, PublishRequestHeader header, int size) {
         return partitionManager.submitCommit(index, header, size)
+                .thenApply(reply -> Message.valueOf(reply.toByteString()));
+    }
+
+    private CompletableFuture<Message> addPartitionCommit(
+            long index, AddPartitionRequest request) {
+        return partitionManager.submitAddPartition(index, request)
                 .thenApply(reply -> Message.valueOf(reply.toByteString()));
     }
 

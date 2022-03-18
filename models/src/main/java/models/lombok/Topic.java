@@ -10,9 +10,10 @@ import java.util.concurrent.ConcurrentHashMap;
 @Data
 @Builder
 public class Topic {
+    @NonNull
     String name;
     @NonNull
-    Map<Integer, Partition> partitionMap;
+    Map<Long, Partition> partitionMap;
 
     public int getNumPartitions() {
         return partitionMap.size();
@@ -23,6 +24,10 @@ public class Topic {
             throw new NullPointerException();
         }
         partitionMap.put(partition.partitionId, partition);
+    }
+
+    public Partition getPartition(long id) {
+        return partitionMap.get(id);
     }
 
     public static Topic createTopic(String name) {

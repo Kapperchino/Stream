@@ -2,6 +2,7 @@ package states.partitions;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.protobuf.ByteString;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import models.lombok.Partition;
@@ -12,11 +13,14 @@ import models.lombok.dto.WriteFileMeta;
 import models.lombok.dto.WriteResultFutures;
 import models.proto.record.RecordListOuterClass.RecordList;
 import models.proto.record.RecordOuterClass.Record;
+import models.proto.requests.AddPartitionRequestOuterClass;
+import models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
+import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
+import models.proto.responses.AddPartitionResponseOuterClass.AddPartitionResponse;
 import models.proto.responses.PublishResponseOuterClass.PublishResponse;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.protocol.RaftPeerId;
-import com.google.protobuf.ByteString;
 import states.FileStoreCommon;
 import states.config.Config;
 import states.entity.FileStore;
@@ -26,7 +30,6 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
@@ -49,9 +52,15 @@ public class PartitionManager {
         this.properties = properties;
     }
 
-    public Partition createPartition(String topicName, int id) {
+    public CompletableFuture<Partition> createPartition(String topicName, long id) {
         if (Strings.isNullOrEmpty(topicName)) {
             throw new NullPointerException();
+        }
+        if (topicMap.containsKey(topicName)) {
+            var topic = topicMap.get(topicName);
+            if (topic.getPartition(id) != null) {
+                return CompletableFuture.supplyAsync(() -> topic.getPartition(id));
+            }
         }
         var segmentMap = new ConcurrentHashMap<Integer, Segment>();
         var segment = Segment.builder()
@@ -81,14 +90,15 @@ public class PartitionManager {
         var topic = topicMap.get(topicName);
         log.info("Adding partition {}", partition);
         topic.addPartition(partition);
-        return partition;
+        return CompletableFuture.supplyAsync(() -> partition);
     }
 
     @SneakyThrows
-    public CompletableFuture<WriteResultFutures> writeToPartition(long index, String topicName, int id, List<Record> records) {
-        if (Strings.isNullOrEmpty(topicName) || store == null) {
+    public CompletableFuture<WriteResultFutures> writeToPartition(long index, String topicName, int id, PublishRequestData data) {
+        if (Strings.isNullOrEmpty(topicName) || data == null) {
             throw new NullPointerException();
         }
+        var records = data.getDataList();
         if (records.isEmpty()) {
             return null;
         }
@@ -166,6 +176,10 @@ public class PartitionManager {
         var list = builder.build();
         var res = store.write(list);
         return CompletableFuture.supplyAsync(() -> f);
+    }
+
+    public CompletableFuture<AddPartitionResponse> submitAddPartition(long index, AddPartitionRequest request) {
+        return null;
     }
 
     //handle errors

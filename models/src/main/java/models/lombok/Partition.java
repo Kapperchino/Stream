@@ -20,7 +20,7 @@ public class Partition {
     @NonNull
     Map<Integer, RecordInfo> recordInfoMap;
     @Getter
-    int partitionId;
+    long partitionId;
     AtomicInteger offset;
     @NonNull
     String topic;
@@ -71,7 +71,7 @@ public class Partition {
         return segment;
     }
 
-    public static String getFileName(String topicName, int partitionId, int segment) {
+    public static String getFileName(String topicName, long partitionId, int segment) {
         return String.format("%s/%s/%s", topicName, partitionId, segment);
     }
 }
