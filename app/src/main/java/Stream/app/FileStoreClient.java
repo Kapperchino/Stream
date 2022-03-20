@@ -1,6 +1,5 @@
 package Stream.app;
 
-import com.google.protobuf.ByteString;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.client.RaftClient;
 import org.apache.ratis.client.api.DataStreamOutput;
@@ -8,6 +7,7 @@ import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.proto.ExamplesProtos.*;
 import org.apache.ratis.protocol.*;
 import org.apache.ratis.protocol.exceptions.StateMachineException;
+import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.util.JavaUtils;
 import org.apache.ratis.util.Preconditions;
 import org.apache.ratis.util.ProtoUtils;

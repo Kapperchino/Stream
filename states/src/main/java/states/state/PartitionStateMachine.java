@@ -1,7 +1,5 @@
 package states.state;
 
-import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 import lombok.extern.slf4j.Slf4j;
 import models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
 import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
@@ -20,6 +18,8 @@ import org.apache.ratis.statemachine.StateMachineStorage;
 import org.apache.ratis.statemachine.TransactionContext;
 import org.apache.ratis.statemachine.impl.BaseStateMachine;
 import org.apache.ratis.statemachine.impl.SimpleStateMachineStorage;
+import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
+import org.apache.ratis.thirdparty.com.google.protobuf.InvalidProtocolBufferException;
 import org.apache.ratis.util.FileUtils;
 import states.FileStoreCommon;
 import states.entity.FileStore;

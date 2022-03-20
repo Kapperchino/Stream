@@ -2,7 +2,6 @@ package states.partitions;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
-import com.google.protobuf.ByteString;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import models.lombok.Partition;
@@ -21,6 +20,7 @@ import models.proto.responses.AddPartitionResponseOuterClass.AddPartitionRespons
 import models.proto.responses.PublishResponseOuterClass.PublishResponse;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.protocol.RaftPeerId;
+import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import states.FileStoreCommon;
 import states.config.Config;
 import states.entity.FileStore;

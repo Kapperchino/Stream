@@ -3,7 +3,7 @@ package states.entity;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.protocol.RaftPeerId;
-import com.google.protobuf.ByteString;
+import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.util.JavaUtils;
 import org.apache.ratis.util.LogUtils;
 import org.apache.ratis.util.Preconditions;

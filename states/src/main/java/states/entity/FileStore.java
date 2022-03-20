@@ -1,6 +1,5 @@
 package states.entity;
 
-import com.google.protobuf.ByteString;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import models.lombok.dto.WriteFileMeta;
@@ -12,6 +11,7 @@ import org.apache.ratis.proto.ExamplesProtos.StreamWriteReplyProto;
 import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.statemachine.StateMachine;
 import org.apache.ratis.statemachine.StateMachine.DataStream;
+import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.util.*;
 import org.apache.ratis.util.function.CheckedSupplier;
 import states.FileStoreCommon;

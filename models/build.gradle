@@ -67,3 +67,7 @@ protobuf {
 clean {
     delete protobuf.generatedFilesBaseDir
 }
+
+shadowJar {
+    relocate 'com.google','org.apache.ratis.thirdparty.com.google'
+}

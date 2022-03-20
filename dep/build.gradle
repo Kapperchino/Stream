@@ -31,6 +31,5 @@ dependencies {
 }
 
 shadowJar {
-    relocate 'org.apache.ratis.thirdparty.com.google', 'com.google'
     relocate 'org.apache.ratis.thirdparty.io.opencensus', 'io.opencensus'
 }
