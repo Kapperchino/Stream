@@ -47,22 +47,22 @@ public class Producer extends Client {
         var firstClient = clients.get(0);
         var partitionOut = firstClient.addPartition(topic, 0);
         log.info("partition result: {}", partitionOut);
-        for (var client : clients) {
-            var builder = Record.newBuilder();
-            builder.setKey(Integer.toString(x++));
-            byte[] b = new byte[20];
-            new Random().nextBytes(b);
-            builder.setPayload(ByteString.copyFrom(b));
-            builder.setTopic(topic);
-            var listBuilder = ImmutableList.<Record>builder();
-            for (int i = 0; i < 10; i++) {
-                listBuilder.add(builder.build());
-            }
-            resultListBuilder.add(client.publish(builder.getKey(), listBuilder.build(), "Test"));
-        }
-        var resultList = resultListBuilder.build();
-        log.info("Results: {}", resultList);
-        long endTime = System.currentTimeMillis();
+//        for (var client : clients) {
+//            var builder = Record.newBuilder();
+//            builder.setKey(Integer.toString(x++));
+//            byte[] b = new byte[20];
+//            new Random().nextBytes(b);
+//            builder.setPayload(ByteString.copyFrom(b));
+//            builder.setTopic(topic);
+//            var listBuilder = ImmutableList.<Record>builder();
+//            for (int i = 0; i < 10; i++) {
+//                listBuilder.add(builder.build());
+//            }
+//            resultListBuilder.add(client.publish(builder.getKey(), listBuilder.build(), "Test"));
+//        }
+//        var resultList = resultListBuilder.build();
+//        log.info("Results: {}", resultList);
+//        long endTime = System.currentTimeMillis();
 
         stopProducers(clients);
     }
