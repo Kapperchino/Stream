@@ -6,9 +6,7 @@ import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
 import models.proto.requests.WriteRequestOuterClass.WriteRequest;
 import org.apache.ratis.conf.RaftProperties;
-import org.apache.ratis.proto.ExamplesProtos;
 import org.apache.ratis.proto.ExamplesProtos.*;
-import org.apache.ratis.proto.RaftProtos;
 import org.apache.ratis.proto.RaftProtos.LogEntryProto;
 import org.apache.ratis.proto.RaftProtos.StateMachineLogEntryProto;
 import org.apache.ratis.protocol.Message;
@@ -110,26 +108,17 @@ public class PartitionStateMachine extends BaseStateMachine {
             return FileStoreCommon.completeExceptionally(
                     entry.getIndex(), "Failed to parse data, entry=" + entry, e);
         }
-        switch (proto.getRequestCase()) {
-            case PUBLISH:
-                var publishReq = proto.getPublish();
-                var machineData = smLog.getStateMachineEntry().getStateMachineData();
-                PublishRequestData publishData = null;
-                try {
-                    publishData = PublishRequestData.parseFrom(machineData);
-                } catch (InvalidProtocolBufferException e) {
-                    return FileStoreCommon.completeExceptionally(
-                            entry.getIndex(), "Failed to parse data, entry=" + entry, e);
-                }
-                return partitionManager.writeToPartition(entry.getIndex(), publishReq.getHeader().getTopic(), 0, publishData);
-            case ADDPARTITION:
-                var addPartitionReq = proto.getAddPartition();
-                return partitionManager.createPartition(addPartitionReq.getTopic(), addPartitionReq.getPartition());
-            case CREATETOPIC:
-                //not needed for now
-                break;
-            default:
-                break;
+        if (proto.getRequestCase() == WriteRequest.RequestCase.PUBLISH) {
+            var publishReq = proto.getPublish();
+            var machineData = smLog.getStateMachineEntry().getStateMachineData();
+            PublishRequestData publishData = null;
+            try {
+                publishData = PublishRequestData.parseFrom(machineData);
+            } catch (InvalidProtocolBufferException e) {
+                return FileStoreCommon.completeExceptionally(
+                        entry.getIndex(), "Failed to parse data, entry=" + entry, e);
+            }
+            return partitionManager.writeToPartition(entry.getIndex(), publishReq.getHeader().getTopic(), 0, publishData);
         }
         return null;
         // sync only if closing the file
@@ -198,7 +187,7 @@ public class PartitionStateMachine extends BaseStateMachine {
                 //add size calculation later
                 return writeCommit(index, request.getPublish().getHeader(), request.getPublish().getData());
             case ADDPARTITION:
-                return addPartitionCommit(index, request.getAddPartition());
+                return addPartition(index, request.getAddPartition());
             case CREATETOPIC:
                 break;
             default:
@@ -221,9 +210,9 @@ public class PartitionStateMachine extends BaseStateMachine {
         return null;
     }
 
-    private CompletableFuture<Message> addPartitionCommit(
+    private CompletableFuture<Message> addPartition(
             long index, AddPartitionRequest request) {
-        var f1 = partitionManager.submitAddPartition(index, request);
+        var f1 = partitionManager.addPartition(index, request);
         if (f1 != null) {
             return f1.thenApply(reply -> Message.valueOf(reply.toByteString()));
         }

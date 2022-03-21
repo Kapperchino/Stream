@@ -28,6 +28,7 @@ import states.entity.FileStore;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Map;
@@ -52,7 +53,8 @@ public class PartitionManager {
         this.properties = properties;
     }
 
-    public CompletableFuture<Partition> createPartition(String topicName, long id) {
+    @SneakyThrows
+    public CompletableFuture<Partition> createPartition(long index, String topicName, long id) {
         if (Strings.isNullOrEmpty(topicName)) {
             throw new NullPointerException();
         }
@@ -71,9 +73,14 @@ public class PartitionManager {
                 .data(null)
                 .offset(0)
                 .path(Paths.get(String.format("%s/%s/0", topicName, id)).toString())
-                .close(false)
+                .close(true)
                 .sync(true)
                 .build();
+
+        Files.createDirectories(store.resolve(Path.of(fileMeta.getPath()).getParent()));
+        var commitQueue = new ConcurrentLinkedQueue<FileWrittenMeta>();
+        commitMap.put(index, commitQueue);
+        commitQueue.offer(fileMeta.getFileWritten());
         store.write(ImmutableList.of(fileMeta));
         segmentMap.put(0, segment);
         if (!topicMap.containsKey(topicName)) {
@@ -178,10 +185,8 @@ public class PartitionManager {
         return CompletableFuture.supplyAsync(() -> f);
     }
 
-    public CompletableFuture<AddPartitionResponse> submitAddPartition(long index, AddPartitionRequest request) {
-        if (!commitMap.containsKey(index)) {
-            return null;
-        }
+    public CompletableFuture<AddPartitionResponse> addPartition(long index, AddPartitionRequest request) {
+        var f = createPartition(index, request.getTopic(), request.getPartition());
         var queue = commitMap.get(index);
         var builder = ImmutableList.<CompletableFuture<Integer>>builder();
         while (!queue.isEmpty()) {
@@ -189,10 +194,24 @@ public class PartitionManager {
             builder.add(store.submitCommit(index, meta.getPath(), meta.isClose(), meta.getOffset(), (int) meta.getSize()));
         }
         var list = builder.build();
-        var future = CompletableFuture.allOf(list.toArray(new CompletableFuture[0]));
-        return future.thenApply((a) ->
-                AddPartitionResponse.newBuilder().setTopic(request.getTopic()).setPartitionId(request.getPartition()).build()
-        );
+        for (var future : list) {
+            //todo handle the errors
+            if (future.isCompletedExceptionally()) {
+                try {
+                    future.get();
+                } catch (Exception e) {
+                    log.error("Error adding new partition: ", e);
+                }
+            } else {
+                try {
+                    future.get();
+                } catch (Exception e) {
+                    log.error("Error adding new partition: ", e);
+                }
+            }
+        }
+        return CompletableFuture.supplyAsync(() ->
+                AddPartitionResponse.newBuilder().setTopic(request.getTopic()).setPartitionId(request.getPartition()).build());
     }
 
     //TODO: handle errors

@@ -7,6 +7,8 @@ import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
 import models.proto.requests.PublishRequestOuterClass.PublishRequest;
 import models.proto.requests.WriteRequestOuterClass.WriteRequest;
+import models.proto.responses.AddPartitionResponseOuterClass;
+import models.proto.responses.AddPartitionResponseOuterClass.AddPartitionResponse;
 import models.proto.responses.PublishResponseOuterClass.PublishResponse;
 import org.apache.ratis.client.RaftClient;
 import org.apache.ratis.conf.RaftProperties;
@@ -149,10 +151,17 @@ public class ProducerClient implements Closeable {
         return PublishResponse.parseFrom(reply.toByteArray());
     }
 
-    public PublishResponse addPartition(String topic, long partition)
+    public AddPartitionResponse addPartition(String topic, long partition)
             throws IOException {
         final ByteString reply = addPartitionImpl(this::send, topic, partition);
-        return PublishResponse.parseFrom(reply.toByteArray());
+        return AddPartitionResponse.parseFrom(reply.toByteArray());
+    }
+
+    public CompletableFuture<AddPartitionResponse> addPartitionAsync(String topic, long partition)
+            throws IOException {
+        return addPartitionImpl(this::sendAsync, topic, partition)
+                .thenApply(reply -> JavaUtils.supplyAndWrapAsCompletionException(
+                        () -> AddPartitionResponse.parseFrom(reply)));
     }
 
     public CompletableFuture<Long> publishAsync(String key, List<Record> data, String topic) {

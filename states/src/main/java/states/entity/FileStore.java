@@ -101,7 +101,7 @@ public class FileStore implements Closeable {
         return roots;
     }
 
-    Path resolve(Path relative) throws IOException {
+    public Path resolve(Path relative) throws IOException {
         final Path root = getRoot(relative);
         final Path full = root.resolve(relative).normalize().toAbsolutePath();
         if (full.equals(root)) {
