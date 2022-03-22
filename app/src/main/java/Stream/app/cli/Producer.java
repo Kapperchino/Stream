@@ -46,7 +46,6 @@ public class Producer extends Client {
 
         long startTime = System.currentTimeMillis();
         var resultListBuilder = ImmutableList.builder();
-        int x = 0;
         var firstClient = clients.get(0);
         var partitionOut = firstClient.addPartition(topic, 0);
         log.info("Added partition: {}", partitionOut);

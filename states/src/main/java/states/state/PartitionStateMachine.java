@@ -118,10 +118,10 @@ public class PartitionStateMachine extends BaseStateMachine {
                 return FileStoreCommon.completeExceptionally(
                         entry.getIndex(), "Failed to parse data, entry=" + entry, e);
             }
+            //TODO: partition management will be added after we get publishing, consuming workin    g with one node and two replicas
             return partitionManager.writeToPartition(entry.getIndex(), publishReq.getHeader().getTopic(), 0, publishData);
         }
         return null;
-        // sync only if closing the file
     }
 
     @Override
@@ -207,7 +207,8 @@ public class PartitionStateMachine extends BaseStateMachine {
         if (f1 != null) {
             return f1.thenApply(reply -> Message.valueOf(reply.toByteString()));
         }
-        return null;
+        return FileStoreCommon.completeExceptionally(
+                index, "Failed to commit, index: " + index);
     }
 
     private CompletableFuture<Message> addPartition(

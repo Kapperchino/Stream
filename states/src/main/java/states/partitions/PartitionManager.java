@@ -21,10 +21,12 @@ import models.proto.responses.PublishResponseOuterClass.PublishResponse;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
+import org.apache.ratis.util.JavaUtils;
 import states.FileStoreCommon;
 import states.config.Config;
 import states.entity.FileStore;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
@@ -181,7 +183,7 @@ public class PartitionManager {
         }
         var list = builder.build();
         var res = store.write(list);
-        return CompletableFuture.supplyAsync(() -> f);
+        return CompletableFuture.supplyAsync(() -> res);
     }
 
     public CompletableFuture<AddPartitionResponse> addPartition(long index, AddPartitionRequest request) {
@@ -195,7 +197,8 @@ public class PartitionManager {
     //TODO: handle errors
     public CompletableFuture<PublishResponse> submitCommit(long index, PublishRequestHeader header, PublishRequestData data) {
         if (!commitMap.containsKey(index)) {
-            return null;
+            return JavaUtils.completeExceptionally(
+                    new IOException(index + " is already committed."));
         }
         var queue = commitMap.get(index);
         var builder = ImmutableList.<CompletableFuture<Integer>>builder();
@@ -208,14 +211,11 @@ public class PartitionManager {
         for (var future : list) {
             //todo handle the errors
             if (future.isCompletedExceptionally()) {
-                try {
-                    future.get();
-                } catch (Exception e) {
-                    log.error("Error committing write: ", e);
-                }
+                log.error("Error committing write:");
             } else {
                 try {
-                    future.get();
+                    var res = future.get();
+                    log.info("Written {} bytes to topic: {} and partition: {}", res, header.getTopic(), 0);
                 } catch (Exception e) {
                     log.error("Error committing write: ", e);
                 }
