@@ -54,14 +54,14 @@ public class PartitionManager {
     }
 
     @SneakyThrows
-    public CompletableFuture<Partition> createPartition(long index, String topicName, long id) {
+    public Partition createPartition(long index, String topicName, long id) {
         if (Strings.isNullOrEmpty(topicName)) {
             throw new NullPointerException();
         }
         if (topicMap.containsKey(topicName)) {
             var topic = topicMap.get(topicName);
             if (topic.getPartition(id) != null) {
-                return CompletableFuture.supplyAsync(() -> topic.getPartition(id));
+                return topic.getPartition(id);
             }
         }
         var segmentMap = new ConcurrentHashMap<Integer, Segment>();
@@ -78,10 +78,6 @@ public class PartitionManager {
                 .build();
 
         Files.createDirectories(store.resolve(Path.of(fileMeta.getPath()).getParent()));
-        var commitQueue = new ConcurrentLinkedQueue<FileWrittenMeta>();
-        commitMap.put(index, commitQueue);
-        commitQueue.offer(fileMeta.getFileWritten());
-        store.write(ImmutableList.of(fileMeta));
         segmentMap.put(0, segment);
         if (!topicMap.containsKey(topicName)) {
             log.info("Creating topic {}", topicName);
@@ -97,7 +93,8 @@ public class PartitionManager {
         var topic = topicMap.get(topicName);
         log.info("Adding partition {}", partition);
         topic.addPartition(partition);
-        return CompletableFuture.supplyAsync(() -> partition);
+        log.info("Index: {}, Created a new partition {}", index, partition);
+        return partition;
     }
 
     @SneakyThrows
@@ -111,16 +108,14 @@ public class PartitionManager {
         }
         var partition = getPartition(topicName, id);
         var segment = partition.getLastSegment();
-        var curSegFileLeft = Config.MAX_SIZE_PER_SEG - partition.getLastRecord().getFileOffset();
+        int curSegFileLeft = Config.MAX_SIZE_PER_SEG;
         int startingOffset = 0;
-        var commitQueue = new ConcurrentLinkedQueue<FileWrittenMeta>();
-        commitMap.put(index, commitQueue);
-
-        if (partition.getLastRecord() == null) {
-            curSegFileLeft = Config.MAX_SIZE_PER_SEG;
-        } else {
+        if (partition.getLastRecord() != null) {
+            curSegFileLeft -= partition.getLastRecord().getFileOffset();
             startingOffset = partition.getLastRecord().getFileOffset();
         }
+        var commitQueue = new ConcurrentLinkedQueue<FileWrittenMeta>();
+        commitMap.put(index, commitQueue);
 
         ByteBuffer buffer = ByteBuffer.allocate(Config.MAX_SIZE_PER_SEG);
         var offset = startingOffset;
@@ -135,15 +130,17 @@ public class PartitionManager {
             i++;
         }
         boolean shouldClose = i >= records.size() - 1;
+        buffer.flip();
+        ByteString byteString = ByteString.copyFrom(buffer);
         var writeFile = WriteFileMeta.builder()
                 .index((int) index)
                 .path(segment.getRelativePath().toString())
-                .close(false)
+                .close(shouldClose)
                 .sync(true)
                 .offset(startingOffset)
-                .data(ByteString.copyFrom(buffer))
+                .data(byteString)
                 .build();
-        var fileMeta = writeFile.getFileWritten(buffer.position());
+        var fileMeta = writeFile.getFileWritten(offset);
         commitQueue.offer(fileMeta);
         var f = store
                 .write(ImmutableList.of(writeFile));
@@ -158,22 +155,22 @@ public class PartitionManager {
         var builder = ImmutableList.<WriteFileMeta>builder();
         for (int x = i; i < records.size(); x++) {
             //fill the buffer up
-            startingOffset = offset;
             while (offset + records.get(x).getSerializedSize() < Config.MAX_SIZE_PER_SEG) {
                 buffer.put(records.get(x).toByteArray());
                 partition.putRecordInfo(records.get(x), offset, segment.getSegmentId());
                 offset += records.get(x).getSerializedSize();
                 x++;
             }
+            buffer.flip();
             writeFile = WriteFileMeta.builder()
                     .index((int) index)
                     .path(segment.getRelativePath().toString())
-                    .close(false)
+                    .close(true)
                     .sync(true)
-                    .offset(startingOffset)
+                    .offset(offset)
                     .data(ByteString.copyFrom(buffer))
                     .build();
-            fileMeta = writeFile.getFileWritten(buffer.position());
+            fileMeta = writeFile.getFileWritten(offset);
             commitQueue.offer(fileMeta);
             builder.add(writeFile);
             segment = partition.addSegment();
@@ -186,9 +183,21 @@ public class PartitionManager {
     }
 
     public CompletableFuture<AddPartitionResponse> addPartition(long index, AddPartitionRequest request) {
-        var f = createPartition(index, request.getTopic(), request.getPartition());
+        var partition = createPartition(index, request.getTopic(), request.getPartition());
+
+        return CompletableFuture.supplyAsync(() ->
+                        AddPartitionResponse.newBuilder().setTopic(request.getTopic()).setPartitionId(request.getPartition()).build())
+                .whenComplete((val, t) -> log.info("Partition {} created", val));
+    }
+
+    //TODO: handle errors
+    public CompletableFuture<PublishResponse> submitCommit(long index, PublishRequestHeader header, PublishRequestData data) {
+        if (!commitMap.containsKey(index)) {
+            return null;
+        }
         var queue = commitMap.get(index);
         var builder = ImmutableList.<CompletableFuture<Integer>>builder();
+        log.info("Committing files from the commit queue");
         while (!queue.isEmpty()) {
             var meta = queue.poll();
             builder.add(store.submitCommit(index, meta.getPath(), meta.isClose(), meta.getOffset(), (int) meta.getSize()));
@@ -200,35 +209,18 @@ public class PartitionManager {
                 try {
                     future.get();
                 } catch (Exception e) {
-                    log.error("Error adding new partition: ", e);
+                    log.error("Error committing write: ", e);
                 }
             } else {
                 try {
                     future.get();
                 } catch (Exception e) {
-                    log.error("Error adding new partition: ", e);
+                    log.error("Error committing write: ", e);
                 }
             }
         }
-        return CompletableFuture.supplyAsync(() ->
-                AddPartitionResponse.newBuilder().setTopic(request.getTopic()).setPartitionId(request.getPartition()).build());
-    }
-
-    //TODO: handle errors
-    public CompletableFuture<PublishResponse> submitCommit(long index, PublishRequestHeader header, PublishRequestData data) {
-        if (!commitMap.containsKey(index)) {
-            return null;
-        }
-        var queue = commitMap.get(index);
-        var builder = ImmutableList.<CompletableFuture<Integer>>builder();
-        while (!queue.isEmpty()) {
-            var meta = queue.poll();
-            builder.add(store.submitCommit(index, meta.getPath(), meta.isClose(), meta.getOffset(), (int) meta.getSize()));
-        }
-        var list = builder.build();
-        var future = CompletableFuture.allOf(list.toArray(new CompletableFuture[0]));
         //TODO: get offset from map
-        return future.thenApply((a) -> {
+        return CompletableFuture.supplyAsync(() -> {
             var response = PublishResponse.newBuilder();
             for (var record : data.getDataList()) {
                 response.addData(RecordMeta.newBuilder()
@@ -236,6 +228,7 @@ public class PartitionManager {
                         .setOffset(0)
                         .setTopic(record.getTopic()));
             }
+            log.info("Write commit finished, with response {}", response.build());
             return response.build();
         });
     }
@@ -255,7 +248,7 @@ public class PartitionManager {
         }
     }
 
-    public Partition getPartition(String topicName, int id) {
+    public Partition getPartition(String topicName, long id) {
         if (Strings.isNullOrEmpty(topicName)) {
             throw new NullPointerException();
         }
