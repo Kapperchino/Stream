@@ -36,15 +36,10 @@ import java.util.concurrent.*;
 public abstract class Client extends SubCommandBase {
 
     private static final int MAX_THREADS_NUM = 1000;
-    @Parameter(names = {"--size"}, description = "Size of each file in bytes", required = true)
-    private long fileSizeInBytes;
-    @Parameter(names = {"--bufferSize"}, description = "Size of buffer in bytes, should less than 4MB, " +
-            "i.e BUFFER_BYTE_LIMIT_DEFAULT", required = false)
-    private int bufferSizeInBytes = 1024;
-    @Parameter(names = {"--numFiles"}, description = "Number of files to be written", required = true)
-    private int numFiles;
-    @Parameter(names = {"--numClients"}, description = "Number of clients to write", required = true)
-    private int numClients;
+    private final long fileSizeInBytes = 1024;
+    private final int bufferSizeInBytes = 1024;
+    private final int numFiles = 1000;
+    private final int numClients = 1;
     @Parameter(names = {"--storage", "-s"}, description = "Storage dir, eg. --storage dir1 --storage dir2",
             required = true)
     private List<File> storageDir = new ArrayList<>();

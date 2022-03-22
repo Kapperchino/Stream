@@ -7,7 +7,6 @@ import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
 import models.proto.requests.PublishRequestOuterClass.PublishRequest;
 import models.proto.requests.WriteRequestOuterClass.WriteRequest;
-import models.proto.responses.AddPartitionResponseOuterClass;
 import models.proto.responses.AddPartitionResponseOuterClass.AddPartitionResponse;
 import models.proto.responses.PublishResponseOuterClass.PublishResponse;
 import org.apache.ratis.client.RaftClient;
@@ -29,6 +28,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * A standalone server using raft with a configurable state machine.
@@ -85,11 +85,12 @@ public class ProducerClient implements Closeable {
 
     private static <OUTPUT, THROWABLE extends Throwable> OUTPUT publishImpl(
             CheckedFunction<ByteString, OUTPUT, THROWABLE> sendFunction,
-            String key, List<Record> data, String topic)
+            List<Record> data, String topic)
             throws THROWABLE {
 
+        List<String> keyList = data.stream().map(Record::getKey).collect(Collectors.toList());
         final var header = PublishRequestHeader.newBuilder()
-                .setKey(key)
+                .addAllKeys(keyList)
                 .setTopic(topic);
 
         final var requestData = PublishRequestData.newBuilder()
@@ -145,9 +146,9 @@ public class ProducerClient implements Closeable {
         return sendAsync(request, client.async()::sendReadOnly);
     }
 
-    public PublishResponse publish(String key, List<Record> data, String topic)
+    public PublishResponse publish(List<Record> data, String topic)
             throws IOException {
-        final ByteString reply = publishImpl(this::send, key, data, topic);
+        final ByteString reply = publishImpl(this::send, data, topic);
         return PublishResponse.parseFrom(reply.toByteArray());
     }
 
@@ -164,8 +165,8 @@ public class ProducerClient implements Closeable {
                         () -> AddPartitionResponse.parseFrom(reply)));
     }
 
-    public CompletableFuture<Long> publishAsync(String key, List<Record> data, String topic) {
-        return publishImpl(this::sendAsync, key, data, topic)
+    public CompletableFuture<Long> publishAsync(List<Record> data, String topic) {
+        return publishImpl(this::sendAsync, data, topic)
                 .thenApply(reply -> JavaUtils.supplyAndWrapAsCompletionException(
                         () -> WriteReplyProto.parseFrom(reply).getLength()));
     }

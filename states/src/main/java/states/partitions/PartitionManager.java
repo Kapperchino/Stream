@@ -111,8 +111,9 @@ public class PartitionManager {
         int curSegFileLeft = Config.MAX_SIZE_PER_SEG;
         int startingOffset = 0;
         if (partition.getLastRecord() != null) {
-            curSegFileLeft -= partition.getLastRecord().getFileOffset();
-            startingOffset = partition.getLastRecord().getFileOffset();
+            var lastRecord = partition.getLastRecord();
+            startingOffset = lastRecord.getFileOffset() + lastRecord.getSize();
+            curSegFileLeft -= startingOffset;
         }
         var commitQueue = new ConcurrentLinkedQueue<FileWrittenMeta>();
         commitMap.put(index, commitQueue);
@@ -153,9 +154,10 @@ public class PartitionManager {
         //iterate through other records
         buffer.clear();
         var builder = ImmutableList.<WriteFileMeta>builder();
-        for (int x = i; i < records.size(); x++) {
+        for (int x = i; x < records.size(); x++) {
             //fill the buffer up
-            while (offset + records.get(x).getSerializedSize() < Config.MAX_SIZE_PER_SEG) {
+            startingOffset = offset;
+            while (x < records.size() && offset + records.get(x).getSerializedSize() < Config.MAX_SIZE_PER_SEG) {
                 buffer.put(records.get(x).toByteArray());
                 partition.putRecordInfo(records.get(x), offset, segment.getSegmentId());
                 offset += records.get(x).getSerializedSize();
@@ -167,7 +169,7 @@ public class PartitionManager {
                     .path(segment.getRelativePath().toString())
                     .close(true)
                     .sync(true)
-                    .offset(offset)
+                    .offset(startingOffset)
                     .data(ByteString.copyFrom(buffer))
                     .build();
             fileMeta = writeFile.getFileWritten(offset);
@@ -260,6 +262,5 @@ public class PartitionManager {
         }
         return topicMap.get(topicName).getPartitionMap().get(id);
     }
-
 
 }

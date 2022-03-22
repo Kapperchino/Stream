@@ -5,7 +5,7 @@ option java_package = "models.proto.requests";
 
 
 message PublishRequestHeader {
-  string key = 1;
+  repeated string keys = 1;
   string topic = 2;
 }
 

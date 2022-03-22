@@ -29,6 +29,9 @@ public class Producer extends Client {
     @Parameter(names = {"--topic", "--t"}, description = "Topic to produce records to", required = true)
     private String topic = null;
 
+    @Parameter(names = {"--records", "--r"}, description = "number of records", required = true)
+    private int numRec = 0;
+
 
     @Override
     protected void operation(List<FileStoreClient> clients) throws IOException, ExecutionException, InterruptedException {
@@ -48,18 +51,17 @@ public class Producer extends Client {
         var partitionOut = firstClient.addPartition(topic, 0);
         log.info("Added partition: {}", partitionOut);
 
-        var builder = Record.newBuilder();
-        builder.setKey(Integer.toString(x++));
-        byte[] b = new byte[20];
-        new Random().nextBytes(b);
-        builder.setPayload(ByteString.copyFrom(b));
-        builder.setTopic(topic);
         var listBuilder = ImmutableList.<Record>builder();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < numRec; i++) {
+            var builder = Record.newBuilder();
+            builder.setKey(Integer.toString(i));
+            byte[] b = new byte[200];
+            new Random().nextBytes(b);
+            builder.setPayload(ByteString.copyFrom(b));
+            builder.setTopic(topic);
             listBuilder.add(builder.build());
         }
-        resultListBuilder.add(firstClient.publish(builder.getKey(), listBuilder.build(), "Test"));
-
+        resultListBuilder.add(firstClient.publish(listBuilder.build(), "Test"));
         var resultList = resultListBuilder.build();
         log.info("Results: {}", resultList);
         long endTime = System.currentTimeMillis();
