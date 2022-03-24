@@ -10,14 +10,15 @@ import models.lombok.Topic;
 import models.lombok.dto.FileWrittenMeta;
 import models.lombok.dto.WriteFileMeta;
 import models.lombok.dto.WriteResultFutures;
-import models.proto.record.RecordListOuterClass.RecordList;
 import models.proto.record.RecordMetaOuterClass.RecordMeta;
 import models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
 import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
 import models.proto.responses.AddPartitionResponseOuterClass.AddPartitionResponse;
+import models.proto.responses.ConsumeResponseOuterClass.ConsumeResponse;
 import models.proto.responses.PublishResponseOuterClass.PublishResponse;
 import org.apache.ratis.conf.RaftProperties;
+import org.apache.ratis.proto.ExamplesProtos.ReadReplyProto;
 import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.util.JavaUtils;
@@ -27,11 +28,9 @@ import states.entity.FileStore;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
@@ -210,19 +209,38 @@ public class PartitionManager {
         });
     }
 
+    //read min(max chunk, 1000 records)
     @SneakyThrows
-    public RecordList readFromPartition(long index, String topicName, int id, int offset) {
+    public CompletableFuture<ConsumeResponse> readFromPartition(String topicName, int id, int offset) {
         if (Strings.isNullOrEmpty(topicName) || store == null) {
             throw new NullPointerException();
         }
         var partition = getPartition(topicName, id);
-        var segment = partition.getSegment(offset);
-        try (SeekableByteChannel in = Files.newByteChannel(segment.getRelativePath(), StandardOpenOption.READ)) {
-            final ByteBuffer buffer = ByteBuffer.allocateDirect(FileStoreCommon.getChunkSize(Config.MAX_CHUNK));
-            in.position(offset).read(buffer);
-            buffer.flip();
-            return RecordList.parseFrom(buffer);
+        var lastRec = partition.getLastRecord();
+        var startingRec = partition.getRecord(offset + 1);
+        if (startingRec == null) {
+            return FileStoreCommon.completeExceptionally(-1,
+                    "No messages to read", new NoSuchElementException());
         }
+        var maxNumRec = Math.min(lastRec.getOffset() - offset, Config.MAX_RECORD_READ);
+        var bytesToRead = calculateBytesToRead(maxNumRec, startingRec.getOffset(), partition);
+        var startingOffset = startingRec.getOffset();
+        var startingSeg = partition.getSegment(startingOffset).getSegmentId();
+        var endingSeg = partition.getSegment(startingOffset + maxNumRec).getSegmentId();
+        var listBuilder = ImmutableList.<CompletableFuture<ReadReplyProto>>builder();
+        for (int x = startingSeg; x < endingSeg; x++) {
+            var curSeg = partition.getSegment(x);
+            var f = store.read(curSeg.getRelativePath().toString(), startingRec.getFileOffset(),
+                    Math.min(Config.MAX_RECORD_READ - startingRec.getFileOffset(), bytesToRead), true);
+            listBuilder.add(f);
+        }
+        ByteBuffer buffer = ByteBuffer.allocate(Config.MAX_RECORD_READ);
+        for (var f : listBuilder.build()) {
+            buffer.put(f.get().getData().asReadOnlyByteBuffer());
+        }
+        buffer.flip();
+        var result = ConsumeResponse.parseFrom(buffer);
+        return CompletableFuture.supplyAsync(() -> result);
     }
 
     public Partition getPartition(String topicName, long id) {
@@ -236,6 +254,16 @@ public class PartitionManager {
             throw new NoSuchElementException(String.format("partition %s does not exist", id));
         }
         return topicMap.get(topicName).getPartitionMap().get(id);
+    }
+
+    private int calculateBytesToRead(int numRecords, int startingOffset, Partition partition) {
+        var endingRec = partition.getRecord(startingOffset + numRecords);
+        var curSize = 0;
+        for (int x = startingOffset; x < startingOffset + numRecords && curSize < Config.MAX_RECORD_READ; x++) {
+            var info = partition.getRecord(x);
+            curSize += info.getSize();
+        }
+        return curSize;
     }
 
 }

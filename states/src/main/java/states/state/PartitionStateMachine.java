@@ -2,11 +2,17 @@ package states.state;
 
 import lombok.extern.slf4j.Slf4j;
 import models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
+import models.proto.requests.ConsumeRequestOuterClass.ConsumeRequest;
 import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
+import models.proto.requests.ReadRequestOuterClass.ReadRequest;
 import models.proto.requests.WriteRequestOuterClass.WriteRequest;
+import models.proto.responses.ConsumeResponseOuterClass.ConsumeResponse;
 import org.apache.ratis.conf.RaftProperties;
-import org.apache.ratis.proto.ExamplesProtos.*;
+import org.apache.ratis.proto.ExamplesProtos.DeleteReplyProto;
+import org.apache.ratis.proto.ExamplesProtos.DeleteRequestProto;
+import org.apache.ratis.proto.ExamplesProtos.FileStoreRequestProto;
+import org.apache.ratis.proto.ExamplesProtos.StreamWriteRequestProto;
 import org.apache.ratis.proto.RaftProtos.LogEntryProto;
 import org.apache.ratis.proto.RaftProtos.StateMachineLogEntryProto;
 import org.apache.ratis.protocol.Message;
@@ -18,6 +24,7 @@ import org.apache.ratis.statemachine.StateMachineStorage;
 import org.apache.ratis.statemachine.TransactionContext;
 import org.apache.ratis.statemachine.impl.BaseStateMachine;
 import org.apache.ratis.statemachine.impl.SimpleStateMachineStorage;
+import org.apache.ratis.thirdparty.com.google.protobuf.AbstractMessageLite;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.thirdparty.com.google.protobuf.InvalidProtocolBufferException;
 import org.apache.ratis.util.FileUtils;
@@ -68,16 +75,24 @@ public class PartitionStateMachine extends BaseStateMachine {
 
     @Override
     public CompletableFuture<Message> query(Message request) {
-        final ReadRequestProto proto;
+
+        final ReadRequest proto;
         try {
-            proto = ReadRequestProto.parseFrom(request.getContent());
+            proto = ReadRequest.parseFrom(request.getContent());
         } catch (InvalidProtocolBufferException e) {
-            return FileStoreCommon.completeExceptionally("Failed to parse " + request, e);
+            return FileStoreCommon.completeExceptionally(
+                    "Failed to parse data, entry=" + request, e);
+        }
+        if (proto.getRequestCase() != ReadRequest.RequestCase.CONSUME) {
+            return null;
         }
 
-        final String path = proto.getPath().toStringUtf8();
-        return files.read(path, proto.getOffset(), proto.getLength(), true)
-                .thenApply(reply -> Message.valueOf(reply.toByteString()));
+        final ConsumeRequest consume = proto.getConsume();
+        CompletableFuture<ConsumeResponse> reply =
+                partitionManager.readFromPartition(consume.getTopic(),
+                        (int) consume.getPartition(), (int) consume.getOffset());
+
+        return reply.thenApply((a) -> Message.valueOf(a.toByteString()));
     }
 
     @Override
@@ -130,24 +145,26 @@ public class PartitionStateMachine extends BaseStateMachine {
     public CompletableFuture<ByteString> read(LogEntryProto entry) {
         final StateMachineLogEntryProto smLog = entry.getStateMachineLogEntry();
         final ByteString data = smLog.getLogData();
-        final FileStoreRequestProto proto;
+        final ReadRequest proto;
         try {
-            proto = FileStoreRequestProto.parseFrom(data);
+            proto = ReadRequest.parseFrom(data);
         } catch (InvalidProtocolBufferException e) {
             return FileStoreCommon.completeExceptionally(
                     entry.getIndex(), "Failed to parse data, entry=" + entry, e);
         }
-        if (proto.getRequestCase() != FileStoreRequestProto.RequestCase.WRITEHEADER) {
+        if (proto.getRequestCase() != ReadRequest.RequestCase.CONSUME) {
             return null;
         }
 
-        final WriteRequestHeaderProto h = proto.getWriteHeader();
-        CompletableFuture<ReadReplyProto> reply =
-                files.read(h.getPath().toStringUtf8(), h.getOffset(), h.getLength(), false);
+        final ConsumeRequest request = proto.getConsume();
+        CompletableFuture<ConsumeResponse> reply =
+                partitionManager.readFromPartition(request.getTopic(),
+                        (int) request.getPartition(), (int) request.getOffset());
 
-        return reply.thenApply(ReadReplyProto::getData);
+        return reply.thenApply(AbstractMessageLite::toByteString);
     }
 
+    //TODO: add streaming
     @Override
     public CompletableFuture<DataStream> stream(RaftClientRequest request) {
         final ByteString reqByteString = request.getMessage().getContent();
