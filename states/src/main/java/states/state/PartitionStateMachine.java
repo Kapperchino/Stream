@@ -26,6 +26,7 @@ import states.entity.FileStore;
 import states.partitions.PartitionManager;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 
@@ -48,6 +49,7 @@ public class PartitionStateMachine extends BaseStateMachine {
             throws IOException {
         super.initialize(server, groupId, raftStorage);
         this.storage.init(raftStorage);
+        Files.createDirectories(files.resolve(Path.of("MetaData")));
         for (Path path : files.getRoots()) {
             FileUtils.createDirectories(path);
         }
@@ -185,6 +187,7 @@ public class PartitionStateMachine extends BaseStateMachine {
         switch (request.getRequestCase()) {
             case PUBLISH:
                 //add size calculation later
+                //TODO: add recovery features, currently when the state machines are down we lose all meta-data
                 return writeCommit(index, request.getPublish().getHeader(), request.getPublish().getData());
             case ADDPARTITION:
                 return addPartition(index, request.getAddPartition());

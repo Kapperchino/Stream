@@ -12,7 +12,6 @@ import models.lombok.dto.WriteFileMeta;
 import models.lombok.dto.WriteResultFutures;
 import models.proto.record.RecordListOuterClass.RecordList;
 import models.proto.record.RecordMetaOuterClass.RecordMeta;
-import models.proto.record.RecordOuterClass.Record;
 import models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
 import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
@@ -43,6 +42,7 @@ import java.util.function.Supplier;
 
 @Slf4j
 public class PartitionManager {
+    //TODO: Serialize this map to a proto, load from MetaData folder at startup
     Map<String, Topic> topicMap = new ConcurrentHashMap<>();
     Map<Long, ConcurrentLinkedQueue<FileWrittenMeta>> commitMap = new ConcurrentHashMap<>();
     RaftPeerId raftPeerId;
@@ -110,53 +110,24 @@ public class PartitionManager {
         }
         var partition = getPartition(topicName, id);
         var segment = partition.getLastSegment();
-        int curSegFileLeft = Config.MAX_SIZE_PER_SEG;
         int startingOffset = 0;
         if (partition.getLastRecord() != null) {
             var lastRecord = partition.getLastRecord();
             startingOffset = lastRecord.getFileOffset() + lastRecord.getSize();
-            curSegFileLeft -= startingOffset;
         }
         var commitQueue = new ConcurrentLinkedQueue<FileWrittenMeta>();
         commitMap.put(index, commitQueue);
 
         ByteBuffer buffer = ByteBuffer.allocate(Config.MAX_SIZE_PER_SEG);
         var offset = startingOffset;
-        //write to cur file
-        int i = 0;
-        while (i < records.size() && records.get(i).getSerializedSize() < curSegFileLeft) {
-            Record curRec = records.get(i);
-            buffer.put(curRec.toByteArray());
-            partition.putRecordInfo(curRec, offset, segment.getSegmentId());
-            curSegFileLeft -= curRec.getSerializedSize();
-            offset += curRec.getSerializedSize();
-            i++;
+        //if cur file is full, then create a new file and resetting stuff
+        if (records.get(0).getSerializedSize() + offset > Config.MAX_SIZE_PER_SEG) {
+            segment = partition.addSegment();
+            offset = 0;
         }
-        boolean shouldClose = i >= records.size() - 1;
-        buffer.flip();
-        ByteString byteString = ByteString.copyFrom(buffer);
-        var writeFile = WriteFileMeta.builder()
-                .index((int) index)
-                .path(segment.getRelativePath().toString())
-                .close(shouldClose)
-                .sync(true)
-                .offset(startingOffset)
-                .data(byteString)
-                .build();
-        var fileMeta = writeFile.getFileWritten(offset);
-        commitQueue.offer(fileMeta);
-        var f = store
-                .write(ImmutableList.of(writeFile));
-
-        //Everything written to first file, and no other files
-        if (i >= records.size() - 1) {
-            return CompletableFuture.supplyAsync(() -> f);
-        }
-
         //iterate through other records
-        buffer.clear();
         var builder = ImmutableList.<WriteFileMeta>builder();
-        for (int x = i; x < records.size(); x++) {
+        for (int x = 0; x < records.size(); x++) {
             //fill the buffer up
             startingOffset = offset;
             while (x < records.size() && offset + records.get(x).getSerializedSize() < Config.MAX_SIZE_PER_SEG) {
@@ -165,19 +136,22 @@ public class PartitionManager {
                 offset += records.get(x).getSerializedSize();
                 x++;
             }
+            var shouldClose = offset >= Config.MAX_SIZE_PER_SEG;
             buffer.flip();
-            writeFile = WriteFileMeta.builder()
+            var writeFile = WriteFileMeta.builder()
                     .index((int) index)
                     .path(segment.getRelativePath().toString())
-                    .close(true)
+                    .close(shouldClose)
                     .sync(true)
                     .offset(startingOffset)
                     .data(ByteString.copyFrom(buffer))
                     .build();
-            fileMeta = writeFile.getFileWritten(offset);
+            var fileMeta = writeFile.getFileWritten(offset);
             commitQueue.offer(fileMeta);
             builder.add(writeFile);
-            segment = partition.addSegment();
+            if (x < records.size()) {
+                segment = partition.addSegment();
+            }
             offset = 0;
             buffer.clear();
         }
@@ -207,6 +181,7 @@ public class PartitionManager {
             var meta = queue.poll();
             builder.add(store.submitCommit(index, meta.getPath(), meta.isClose(), meta.getOffset(), (int) meta.getSize()));
         }
+        commitMap.remove(index);
         var list = builder.build();
         for (var future : list) {
             //todo handle the errors
@@ -214,7 +189,7 @@ public class PartitionManager {
                 log.error("Error committing write:");
             } else {
                 try {
-                    var res = future.get();
+                    var res = future.join();
                     log.info("Written {} bytes to topic: {} and partition: {}", res, header.getTopic(), 0);
                 } catch (Exception e) {
                     log.error("Error committing write: ", e);

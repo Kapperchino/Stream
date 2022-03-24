@@ -88,7 +88,7 @@ public class FileStore implements Closeable {
                 () -> JavaUtils.getClassSimpleName(getClass()) + " is not initialized.");
     }
 
-    private Path getRoot(Path relative) {
+    private Path getRoot(@NonNull Path relative) {
         int hash = relative.toAbsolutePath().toString().hashCode() % rootSuppliers.size();
         return rootSuppliers.get(Math.abs(hash)).get();
     }
@@ -165,7 +165,7 @@ public class FileStore implements Closeable {
             var index = file.getIndex();
             var sync = file.isSync();
             final int size = data != null ? data.size() : 0;
-            log.trace("write {}, offset={}, size={}, close? {} @{}:{}",
+            log.info("write {}, offset={}, size={}, close? {} @{}:{}",
                     relative, offset, size, close, getId(), index);
             final boolean createNew = offset == 0L;
             final FileInfo.UnderConstruction uc;
