@@ -1,10 +1,10 @@
 package models.lombok;
 
+import com.google.protobuf.CodedOutputStream;
 import lombok.Builder;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NonNull;
-import models.proto.record.RecordOuterClass;
 import models.proto.record.RecordOuterClass.Record;
 
 import java.nio.file.Paths;
@@ -46,9 +46,10 @@ public class Partition {
 
     public void putRecordInfo(Record record, int fileOffSet, int segmentId) {
         var id = recordInfoMap.size();
+        var serialized = record.getSerializedSize();
         recordInfoMap.put(id,
                 RecordInfo.builder()
-                        .size(record.getSerializedSize())
+                        .size(serialized + CodedOutputStream.computeUInt32SizeNoTag(serialized))
                         .offset(id)
                         .fileOffset(fileOffSet)
                         .segmentId(segmentId).build());

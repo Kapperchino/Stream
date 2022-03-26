@@ -11,6 +11,7 @@ import models.lombok.dto.FileWrittenMeta;
 import models.lombok.dto.WriteFileMeta;
 import models.lombok.dto.WriteResultFutures;
 import models.proto.record.RecordMetaOuterClass.RecordMeta;
+import models.proto.record.RecordOuterClass.Record;
 import models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
 import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
@@ -21,13 +22,14 @@ import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.proto.ExamplesProtos.ReadReplyProto;
 import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
+import org.apache.ratis.thirdparty.com.google.protobuf.CodedOutputStream;
 import org.apache.ratis.util.JavaUtils;
 import states.FileStoreCommon;
 import states.config.Config;
 import states.entity.FileStore;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -117,7 +119,7 @@ public class PartitionManager {
         var commitQueue = new ConcurrentLinkedQueue<FileWrittenMeta>();
         commitMap.put(index, commitQueue);
 
-        ByteBuffer buffer = ByteBuffer.allocate(Config.MAX_SIZE_PER_SEG);
+        ByteArrayOutputStream stream = new ByteArrayOutputStream(Config.MAX_SIZE_PER_SEG);
         var offset = startingOffset;
         //if cur file is full, then create a new file and resetting stuff
         if (records.get(0).getSerializedSize() + offset > Config.MAX_SIZE_PER_SEG) {
@@ -130,20 +132,21 @@ public class PartitionManager {
             //fill the buffer up
             startingOffset = offset;
             while (x < records.size() && offset + records.get(x).getSerializedSize() < Config.MAX_SIZE_PER_SEG) {
-                buffer.put(records.get(x).toByteArray());
-                partition.putRecordInfo(records.get(x), offset, segment.getSegmentId());
-                offset += records.get(x).getSerializedSize();
+                var record = records.get(x);
+                var serialized = record.getSerializedSize();
+                record.writeDelimitedTo(stream);
+                partition.putRecordInfo(record, offset, segment.getSegmentId());
+                offset += serialized + CodedOutputStream.computeUInt32SizeNoTag(serialized);
                 x++;
             }
             var shouldClose = offset >= Config.MAX_SIZE_PER_SEG;
-            buffer.flip();
             var writeFile = WriteFileMeta.builder()
                     .index((int) index)
                     .path(segment.getRelativePath().toString())
                     .close(shouldClose)
                     .sync(true)
                     .offset(startingOffset)
-                    .data(ByteString.copyFrom(buffer))
+                    .data(ByteString.copyFrom(stream.toByteArray()))
                     .build();
             var fileMeta = writeFile.getFileWritten(offset);
             commitQueue.offer(fileMeta);
@@ -152,7 +155,7 @@ public class PartitionManager {
                 segment = partition.addSegment();
             }
             offset = 0;
-            buffer.clear();
+            stream.reset();
         }
         var list = builder.build();
         var res = store.write(list);
@@ -217,7 +220,7 @@ public class PartitionManager {
         }
         var partition = getPartition(topicName, id);
         var lastRec = partition.getLastRecord();
-        var startingRec = partition.getRecord(offset + 1);
+        var startingRec = partition.getRecord(offset);
         if (startingRec == null) {
             return FileStoreCommon.completeExceptionally(-1,
                     "No messages to read", new NoSuchElementException());
@@ -227,19 +230,26 @@ public class PartitionManager {
         var startingOffset = startingRec.getOffset();
         var startingSeg = partition.getSegment(startingOffset).getSegmentId();
         var endingSeg = partition.getSegment(startingOffset + maxNumRec).getSegmentId();
-        var listBuilder = ImmutableList.<CompletableFuture<ReadReplyProto>>builder();
+        var futures = ImmutableList.<CompletableFuture<ReadReplyProto>>builder();
+        var records = ImmutableList.<Record>builder();
         for (int x = startingSeg; x < endingSeg; x++) {
             var curSeg = partition.getSegment(x);
             var f = store.read(curSeg.getRelativePath().toString(), startingRec.getFileOffset(),
                     Math.min(Config.MAX_RECORD_READ - startingRec.getFileOffset(), bytesToRead), true);
-            listBuilder.add(f);
+            futures.add(f);
         }
-        ByteBuffer buffer = ByteBuffer.allocate(Config.MAX_RECORD_READ);
-        for (var f : listBuilder.build()) {
-            buffer.put(f.get().getData().asReadOnlyByteBuffer());
+        for (var f : futures.build()) {
+            var buf = f.get().getData();
+            var input = buf.newInput();
+            var record = Record.parseDelimitedFrom(input);
+            while (record != null) {
+                records.add(record);
+                record = Record.parseDelimitedFrom(input);
+            }
         }
-        buffer.flip();
-        var result = ConsumeResponse.parseFrom(buffer);
+        var result = ConsumeResponse.newBuilder()
+                .addAllData(records.build())
+                .build();
         return CompletableFuture.supplyAsync(() -> result);
     }
 

@@ -75,7 +75,6 @@ public class PartitionStateMachine extends BaseStateMachine {
 
     @Override
     public CompletableFuture<Message> query(Message request) {
-
         final ReadRequest proto;
         try {
             proto = ReadRequest.parseFrom(request.getContent());

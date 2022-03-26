@@ -1,13 +1,18 @@
 package Stream.app;
 
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import models.proto.record.RecordOuterClass.Record;
 import models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
+import models.proto.requests.ConsumeRequestOuterClass.ConsumeRequest;
 import models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
 import models.proto.requests.PublishRequestOuterClass.PublishRequest;
+import models.proto.requests.ReadRequestOuterClass.ReadRequest;
 import models.proto.requests.WriteRequestOuterClass.WriteRequest;
 import models.proto.responses.AddPartitionResponseOuterClass.AddPartitionResponse;
+import models.proto.responses.ConsumeResponseOuterClass;
+import models.proto.responses.ConsumeResponseOuterClass.ConsumeResponse;
 import models.proto.responses.PublishResponseOuterClass.PublishResponse;
 import org.apache.ratis.client.RaftClient;
 import org.apache.ratis.conf.RaftProperties;
@@ -125,6 +130,23 @@ public class ProducerClient implements Closeable {
         return sendFunction.apply(request.toByteString());
     }
 
+    private static <OUTPUT, THROWABLE extends Throwable> OUTPUT readImpl(
+            CheckedFunction<ByteString, OUTPUT, THROWABLE> sendFunction,
+            String topic, long partition, long offset)
+            throws THROWABLE {
+        final var consume = ConsumeRequest.newBuilder()
+                .setOffset(offset)
+                .setPartition(partition)
+                .setTopic(topic)
+                .build();
+
+        final var request = ReadRequest.newBuilder()
+                .setConsume(consume)
+                .build();
+
+        return sendFunction.apply(request.toByteString());
+    }
+
     @Override
     public void close() throws IOException {
         client.close();
@@ -155,7 +177,13 @@ public class ProducerClient implements Closeable {
     public AddPartitionResponse addPartition(String topic, long partition)
             throws IOException {
         final ByteString reply = addPartitionImpl(this::send, topic, partition);
-        return AddPartitionResponse.parseFrom(reply.toByteArray());
+        return AddPartitionResponse.parseFrom(reply);
+    }
+
+    @SneakyThrows
+    public ConsumeResponse readPartition(long offset, long partition, String topic) {
+        final ByteString reply = readImpl(this::sendReadOnly, topic, partition, offset);
+        return ConsumeResponse.parseFrom(reply);
     }
 
     public CompletableFuture<AddPartitionResponse> addPartitionAsync(String topic, long partition)
