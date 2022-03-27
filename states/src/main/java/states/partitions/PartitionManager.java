@@ -24,7 +24,6 @@ import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.thirdparty.com.google.protobuf.CodedOutputStream;
 import org.apache.ratis.util.JavaUtils;
-import states.FileStoreCommon;
 import states.config.Config;
 import states.entity.FileStore;
 
@@ -123,6 +122,7 @@ public class PartitionManager {
         var offset = startingOffset;
         //if cur file is full, then create a new file and resetting stuff
         if (records.get(0).getSerializedSize() + offset > Config.MAX_SIZE_PER_SEG) {
+            segment.setSize(offset);
             segment = partition.addSegment();
             offset = 0;
         }
@@ -131,14 +131,15 @@ public class PartitionManager {
         for (int x = 0; x < records.size(); x++) {
             //fill the buffer up
             startingOffset = offset;
-            while (x < records.size() && offset + records.get(x).getSerializedSize() < Config.MAX_SIZE_PER_SEG) {
+            //writes until buffer full or all records written
+            while (x < records.size() && offset + getRecordSize(records.get(x)) < Config.MAX_SIZE_PER_SEG) {
                 var record = records.get(x);
-                var serialized = record.getSerializedSize();
                 record.writeDelimitedTo(stream);
                 partition.putRecordInfo(record, offset, segment.getSegmentId());
-                offset += serialized + CodedOutputStream.computeUInt32SizeNoTag(serialized);
+                offset += getRecordSize(record);
                 x++;
             }
+            segment.setSize(offset);
             var shouldClose = offset >= Config.MAX_SIZE_PER_SEG;
             var writeFile = WriteFileMeta.builder()
                     .index((int) index)
@@ -148,7 +149,7 @@ public class PartitionManager {
                     .offset(startingOffset)
                     .data(ByteString.copyFrom(stream.toByteArray()))
                     .build();
-            var fileMeta = writeFile.getFileWritten(offset);
+            var fileMeta = writeFile.getFileWritten(stream.size());
             commitQueue.offer(fileMeta);
             builder.add(writeFile);
             if (x < records.size()) {
@@ -218,39 +219,42 @@ public class PartitionManager {
         if (Strings.isNullOrEmpty(topicName) || store == null) {
             throw new NullPointerException();
         }
+        var fileList = ImmutableList.<Segment>builder();
+
         var partition = getPartition(topicName, id);
-        var lastRec = partition.getLastRecord();
-        var startingRec = partition.getRecord(offset);
-        if (startingRec == null) {
-            return FileStoreCommon.completeExceptionally(-1,
-                    "No messages to read", new NoSuchElementException());
+        var startingSegment = partition.getSegment(offset);
+        var startingRecord = partition.getRecord(offset);
+        var initialSegSize = Config.MAX_SIZE_PER_SEG - startingRecord.getFileOffset();
+        var sizeLeft = Config.MAX_SIZE_PER_SEG - initialSegSize;
+        fileList.add(startingSegment);
+        int i = offset;
+        while (sizeLeft > 0) {
+            var nextSeg = partition.getSegment(++i);
+            if (nextSeg == null) {
+                break;
+            }
+            sizeLeft -= Config.MAX_SIZE_PER_SEG;
+            fileList.add(nextSeg);
         }
-        var maxNumRec = Math.min(lastRec.getOffset() - offset, Config.MAX_RECORD_READ);
-        var bytesToRead = calculateBytesToRead(maxNumRec, startingRec.getOffset(), partition);
-        var startingOffset = startingRec.getOffset();
-        var startingSeg = partition.getSegment(startingOffset).getSegmentId();
-        var endingSeg = partition.getSegment(startingOffset + maxNumRec).getSegmentId();
+        int fileOffset = startingRecord.getFileOffset();
         var futures = ImmutableList.<CompletableFuture<ReadReplyProto>>builder();
-        var records = ImmutableList.<Record>builder();
-        for (int x = startingSeg; x < endingSeg; x++) {
-            var curSeg = partition.getSegment(x);
-            var f = store.read(curSeg.getRelativePath().toString(), startingRec.getFileOffset(),
-                    Math.min(Config.MAX_RECORD_READ - startingRec.getFileOffset(), bytesToRead), true);
+        for (var seg : fileList.build()) {
+            var f =
+                    store.read(seg.getRelativePath().toString(), fileOffset, seg.getSize(), true);
             futures.add(f);
         }
-        for (var f : futures.build()) {
-            var buf = f.get().getData();
-            var input = buf.newInput();
+        var results = ConsumeResponse.newBuilder();
+        //now that we have the files, we need to read through them and parse to record
+        for (var future : futures.build()) {
+            var buffer = future.get().getData();
+            var input = buffer.newInput();
             var record = Record.parseDelimitedFrom(input);
-            while (record != null) {
-                records.add(record);
+            while (record != null){
+                results.addData(record);
                 record = Record.parseDelimitedFrom(input);
             }
         }
-        var result = ConsumeResponse.newBuilder()
-                .addAllData(records.build())
-                .build();
-        return CompletableFuture.supplyAsync(() -> result);
+        return CompletableFuture.supplyAsync(results::build);
     }
 
     public Partition getPartition(String topicName, long id) {
@@ -264,6 +268,11 @@ public class PartitionManager {
             throw new NoSuchElementException(String.format("partition %s does not exist", id));
         }
         return topicMap.get(topicName).getPartitionMap().get(id);
+    }
+
+    private int getRecordSize(Record record) {
+        int size = record.getSerializedSize();
+        return size + CodedOutputStream.computeUInt32SizeNoTag(size);
     }
 
     private int calculateBytesToRead(int numRecords, int startingOffset, Partition partition) {

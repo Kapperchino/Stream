@@ -35,11 +35,11 @@ public class Partition {
 
     public Segment getSegment(int offset) {
         if (!recordInfoMap.containsKey(offset)) {
-            throw new NoSuchElementException();
+            return null;
         }
         var segmentId = recordInfoMap.get(offset).getSegmentId();
         if (!segmentMap.containsKey(segmentId)) {
-            throw new NoSuchElementException();
+            return null;
         }
         return segmentMap.get(segmentId);
     }

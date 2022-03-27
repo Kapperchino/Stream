@@ -60,7 +60,6 @@ abstract class FileInfo {
                     + " + length (=" + length + ") > size = " + getWriteSize()
                     + ", path=" + getRelativePath());
         }
-
         try (SeekableByteChannel in = Files.newByteChannel(
                 resolver.apply(getRelativePath()), StandardOpenOption.READ)) {
             final ByteBuffer buffer = ByteBuffer.allocateDirect(FileStoreCommon.getChunkSize(length));
