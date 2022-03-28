@@ -8,4 +8,4 @@
  */
 
 rootProject.name = 'Stream'
-include('app', 'utilities', 'models', 'states', 'dep')
+include('app', 'utilities', 'models', 'states')

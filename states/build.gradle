@@ -13,8 +13,20 @@ java {
     }
 }
 
+repositories {
+    maven {
+        url = "https://maven.pkg.github.com/Kapperchino/StreamDep"
+        credentials {
+            username = project.properties['usr']
+            password = project.properties['pwd']
+            println(password);
+        }
+    }
+}
+
+
 dependencies {
+    implementation "kapperchino:stream-deps:0.33"
     implementation project(path: ':models', configuration: 'shadow')
-    implementation project(path: ':dep', configuration: 'shadow')
 }
 // Configure Auto Relocation
