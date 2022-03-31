@@ -1,5 +1,10 @@
 package states.partitions;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import lombok.SneakyThrows;
@@ -43,15 +48,17 @@ import java.util.function.Supplier;
 @Slf4j
 public class PartitionManager {
     //TODO: Serialize this map to a proto, load from MetaData folder at startup
+    @JsonProperty
     Map<String, Topic> topicMap = new ConcurrentHashMap<>();
+    @JsonIgnore
     Map<Long, ConcurrentLinkedQueue<FileWrittenMeta>> commitMap = new ConcurrentHashMap<>();
-    RaftPeerId raftPeerId;
+    @JsonProperty
     RaftProperties properties;
+    @JsonProperty
     public FileStore store;
 
     public PartitionManager(Supplier<RaftPeerId> idSupplier, RaftProperties properties) {
         this.store = new FileStore(idSupplier, properties);
-        raftPeerId = idSupplier.get();
         this.properties = properties;
     }
 
@@ -249,7 +256,7 @@ public class PartitionManager {
             var buffer = future.get().getData();
             var input = buffer.newInput();
             var record = Record.parseDelimitedFrom(input);
-            while (record != null){
+            while (record != null) {
                 results.addData(record);
                 record = Record.parseDelimitedFrom(input);
             }

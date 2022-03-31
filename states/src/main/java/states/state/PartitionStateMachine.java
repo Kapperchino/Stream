@@ -1,5 +1,6 @@
 package states.state;
 
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
 import models.proto.requests.ConsumeRequestOuterClass.ConsumeRequest;
@@ -19,6 +20,7 @@ import org.apache.ratis.protocol.Message;
 import org.apache.ratis.protocol.RaftClientRequest;
 import org.apache.ratis.protocol.RaftGroupId;
 import org.apache.ratis.server.RaftServer;
+import org.apache.ratis.server.protocol.TermIndex;
 import org.apache.ratis.server.storage.RaftStorage;
 import org.apache.ratis.statemachine.StateMachineStorage;
 import org.apache.ratis.statemachine.TransactionContext;
@@ -31,6 +33,7 @@ import org.apache.ratis.util.FileUtils;
 import states.FileStoreCommon;
 import states.entity.FileStore;
 import states.partitions.PartitionManager;
+import states.snapshot.SnapshotHelper;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -60,6 +63,13 @@ public class PartitionStateMachine extends BaseStateMachine {
         for (Path path : files.getRoots()) {
             FileUtils.createDirectories(path);
         }
+        SnapshotHelper.loadSnapShot(this,storage,false);
+    }
+
+    @Override
+    public void reinitialize() throws IOException {
+        close();
+        SnapshotHelper.loadSnapShot(this,storage,false);
     }
 
     @Override
@@ -71,6 +81,15 @@ public class PartitionStateMachine extends BaseStateMachine {
     public void close() {
         files.close();
         setLastAppliedTermIndex(null);
+    }
+
+    @SneakyThrows
+    @Override
+    public long takeSnapshot() {
+        var last = this.getLastAppliedTermIndex();
+        var res = SnapshotHelper.takeSnapshot(partitionManager, storage, last);
+        res.get();
+        return last.getIndex();
     }
 
     @Override
@@ -134,7 +153,7 @@ public class PartitionStateMachine extends BaseStateMachine {
                 return FileStoreCommon.completeExceptionally(
                         entry.getIndex(), "Failed to parse data, entry=" + entry, e);
             }
-            //TODO: partition management will be added after we get publishing, consuming workin    g with one node and two replicas
+            //TODO: partition management will be added after we get publishing, consuming working with one node and two replicas
             return partitionManager.writeToPartition(entry.getIndex(), publishReq.getHeader().getTopic(), 0, publishData);
         }
         return null;
@@ -202,7 +221,6 @@ public class PartitionStateMachine extends BaseStateMachine {
 
         switch (request.getRequestCase()) {
             case PUBLISH:
-                //add size calculation later
                 //TODO: add recovery features, currently when the state machines are down we lose all meta-data
                 return writeCommit(index, request.getPublish().getHeader(), request.getPublish().getData());
             case ADDPARTITION:
@@ -251,6 +269,10 @@ public class PartitionStateMachine extends BaseStateMachine {
                 Message.valueOf(DeleteReplyProto.newBuilder().setResolvedPath(
                                 FileStoreCommon.toByteString(resolved)).build().toByteString(),
                         () -> "Message:" + resolved));
+    }
+
+    public void setLastAppliedTermIndex(TermIndex newTI) {
+        super.setLastAppliedTermIndex(newTI);
     }
 
     static class LocalStream implements DataStream {

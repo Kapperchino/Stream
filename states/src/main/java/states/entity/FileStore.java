@@ -1,6 +1,11 @@
 package states.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.NonNull;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import models.lombok.dto.WriteFileMeta;
 import models.lombok.dto.WriteResultFutures;
@@ -27,15 +32,23 @@ import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class FileStore implements Closeable {
+    @JsonIgnore
     private final Supplier<RaftPeerId> idSupplier;
+    @JsonIgnore
     private final List<Supplier<Path>> rootSuppliers;
+    @JsonProperty
     private final FileMap files;
+    @JsonProperty
     private final ExecutorService writer;
+    @JsonProperty
     private final ExecutorService committer;
+    @JsonProperty
     private final ExecutorService reader;
+    @JsonProperty
     private final ExecutorService deleter;
 
     public FileStore(Supplier<RaftPeerId> idSupplier, RaftProperties properties) {
@@ -83,6 +96,7 @@ public class FileStore implements Closeable {
         return f;
     }
 
+    @JsonIgnore
     public RaftPeerId getId() {
         return Objects.requireNonNull(idSupplier.get(),
                 () -> JavaUtils.getClassSimpleName(getClass()) + " is not initialized.");
@@ -236,7 +250,9 @@ public class FileStore implements Closeable {
     }
 
     static class FileMap {
+        @JsonProperty
         private final Object name;
+        @JsonProperty
         private final Map<Path, FileInfo> map = new ConcurrentHashMap<>();
 
         FileMap(Supplier<String> name) {
@@ -275,6 +291,7 @@ public class FileStore implements Closeable {
     }
 
     public static class FileStoreDataChannel implements StateMachine.DataChannel {
+        @JsonProperty
         private final Path path;
         private final RandomAccessFile randomAccessFile;
 

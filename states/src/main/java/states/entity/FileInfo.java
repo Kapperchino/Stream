@@ -1,5 +1,7 @@
 package states.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.protocol.RaftPeerId;
@@ -29,6 +31,7 @@ import java.util.function.Supplier;
 
 @Slf4j
 abstract class FileInfo {
+    @JsonProperty
     private final Path relativePath;
 
     FileInfo(Path relativePath) {
@@ -75,7 +78,9 @@ abstract class FileInfo {
     }
 
     static class ReadOnly extends FileInfo {
+        @JsonProperty
         private final long committedSize;
+        @JsonProperty
         private final long writeSize;
 
         ReadOnly(UnderConstruction f) {
@@ -107,6 +112,7 @@ abstract class FileInfo {
         /**
          * Previous commit index.
          */
+        @JsonProperty
         private final long previousIndex;
 
         WriteInfo(CompletableFuture<Integer> writeFuture, long previousIndex) {
@@ -133,16 +139,20 @@ abstract class FileInfo {
          * A queue to make sure that the writes are in order.
          */
         private final TaskQueue writeQueue = new TaskQueue("writeQueue");
+        @JsonProperty
         private final Map<Long, WriteInfo> writeInfoMap = new ConcurrentHashMap<>();
         private final AtomicLong lastWriteIndex = new AtomicLong(-1L);
+        @JsonIgnore
         private FileStore.FileStoreDataChannel out;
         /**
          * The size written to a local file.
          */
+        @JsonProperty
         private volatile long writeSize;
         /**
          * The size committed to client.
          */
+        @JsonProperty
         private volatile long committedSize;
 
         UnderConstruction(Path relativePath) {

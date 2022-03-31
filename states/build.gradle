@@ -27,6 +27,8 @@ repositories {
 
 dependencies {
     implementation "kapperchino:stream-deps:0.33"
+    //move this to shared dep later
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.2.2'
     implementation project(path: ':models', configuration: 'shadow')
 }
 // Configure Auto Relocation
