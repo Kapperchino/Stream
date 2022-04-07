@@ -77,6 +77,7 @@ public class Server extends SubCommandBase {
             RaftConfigKeys.DataStream.setType(properties, SupportedDataStreamType.NETTY);
         }
         RaftServerConfigKeys.setStorageDir(properties, storageDir);
+        RaftServerConfigKeys.Snapshot.setAutoTriggerEnabled(properties, true);
         RaftServerConfigKeys.Write.setElementLimit(properties, 40960);
         RaftServerConfigKeys.Write.setByteLimit(properties, SizeInBytes.valueOf("1000MB"));
         ConfUtils.setFiles(properties::setFiles, FileStoreCommon.STATEMACHINE_DIR_KEY, storageDir);

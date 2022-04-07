@@ -47,13 +47,14 @@ public class PartitionStateMachine extends BaseStateMachine {
     private final SimpleStateMachineStorage storage = new SimpleStateMachineStorage();
 
     private final FileStore files;
-    private final PartitionManager partitionManager;
+    public PartitionManager partitionManager;
 
     public PartitionStateMachine(RaftProperties properties) {
         this.partitionManager = new PartitionManager(this::getId, properties);
         files = partitionManager.store;
     }
 
+    @SneakyThrows
     @Override
     public void initialize(RaftServer server, RaftGroupId groupId, RaftStorage raftStorage)
             throws IOException {
@@ -63,13 +64,14 @@ public class PartitionStateMachine extends BaseStateMachine {
         for (Path path : files.getRoots()) {
             FileUtils.createDirectories(path);
         }
-        SnapshotHelper.loadSnapShot(this,storage,false);
+        SnapshotHelper.loadSnapShot(this, storage, false).get();
     }
 
+    @SneakyThrows
     @Override
     public void reinitialize() throws IOException {
         close();
-        SnapshotHelper.loadSnapShot(this,storage,false);
+        SnapshotHelper.loadSnapShot(this, storage, false).get();
     }
 
     @Override
@@ -203,6 +205,7 @@ public class PartitionStateMachine extends BaseStateMachine {
         return files.streamLink(stream);
     }
 
+    @SneakyThrows
     @Override
     public CompletableFuture<Message> applyTransaction(TransactionContext trx) {
         final LogEntryProto entry = trx.getLogEntry();
@@ -222,7 +225,9 @@ public class PartitionStateMachine extends BaseStateMachine {
         switch (request.getRequestCase()) {
             case PUBLISH:
                 //TODO: add recovery features, currently when the state machines are down we lose all meta-data
-                return writeCommit(index, request.getPublish().getHeader(), request.getPublish().getData());
+                var commit = writeCommit(index, request.getPublish().getHeader(), request.getPublish().getData());
+                SnapshotHelper.takeSnapshot(partitionManager, storage, getLastAppliedTermIndex()).get();
+                return commit;
             case ADDPARTITION:
                 return addPartition(index, request.getAddPartition());
             case CREATETOPIC:

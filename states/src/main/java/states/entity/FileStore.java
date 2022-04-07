@@ -2,10 +2,12 @@ package states.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import lombok.NonNull;
-import lombok.SneakyThrows;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.KeyDeserializer;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import lombok.*;
+import lombok.extern.jackson.Jacksonized;
 import lombok.extern.slf4j.Slf4j;
 import models.lombok.dto.WriteFileMeta;
 import models.lombok.dto.WriteResultFutures;
@@ -32,9 +34,12 @@ import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 @Slf4j
+@Data
+@Builder
+@AllArgsConstructor
+@Jacksonized
 public class FileStore implements Closeable {
     @JsonIgnore
     private final Supplier<RaftPeerId> idSupplier;
@@ -42,19 +47,22 @@ public class FileStore implements Closeable {
     private final List<Supplier<Path>> rootSuppliers;
     @JsonProperty
     private final FileMap files;
-    @JsonProperty
-    private final ExecutorService writer;
-    @JsonProperty
-    private final ExecutorService committer;
-    @JsonProperty
-    private final ExecutorService reader;
-    @JsonProperty
-    private final ExecutorService deleter;
+    @JsonIgnore
+    @Builder.Default
+    private ExecutorService writer = Executors.newFixedThreadPool(10);
+    @JsonIgnore
+    @Builder.Default
+    private ExecutorService committer = Executors.newFixedThreadPool(10);;
+    @JsonIgnore
+    @Builder.Default
+    private ExecutorService reader = Executors.newFixedThreadPool(10);;
+    @JsonIgnore
+    @Builder.Default
+    private ExecutorService deleter= Executors.newFixedThreadPool(10);;
 
     public FileStore(Supplier<RaftPeerId> idSupplier, RaftProperties properties) {
         this.idSupplier = idSupplier;
         this.rootSuppliers = new ArrayList<>();
-
         int writeThreadNum = ConfUtils.getInt(properties::getInt, FileStoreCommon.STATEMACHINE_WRITE_THREAD_NUM,
                 1, log::info);
         int readThreadNum = ConfUtils.getInt(properties::getInt, FileStoreCommon.STATEMACHINE_READ_THREAD_NUM,
@@ -107,6 +115,7 @@ public class FileStore implements Closeable {
         return rootSuppliers.get(Math.abs(hash)).get();
     }
 
+    @JsonIgnore
     public List<Path> getRoots() {
         List<Path> roots = new ArrayList<>();
         for (Supplier<Path> s : rootSuppliers) {
@@ -249,14 +258,32 @@ public class FileStore implements Closeable {
         }, writer);
     }
 
+    protected static class PathDeserializer extends KeyDeserializer {
+        @Override
+        public Path deserializeKey(String key, DeserializationContext ctxt) {
+            return Path.of(key);
+        }
+    }
+
+    @AllArgsConstructor
+    @NoArgsConstructor
     static class FileMap {
         @JsonProperty
-        private final Object name;
+        private Object name;
+
+        @JsonDeserialize(keyUsing = PathDeserializer.class)
+        @JsonSerialize()
         @JsonProperty
-        private final Map<Path, FileInfo> map = new ConcurrentHashMap<>();
+        private Map<Path, FileInfo> map;
 
         FileMap(Supplier<String> name) {
             this.name = StringUtils.stringSupplierAsObject(name);
+            this.map = new ConcurrentHashMap<>();
+        }
+
+        FileMap(Supplier<String> name, Map<Path,FileInfo> map) {
+            this.name = StringUtils.stringSupplierAsObject(name);
+            this.map = map;
         }
 
         FileInfo get(String relative) throws FileNotFoundException {

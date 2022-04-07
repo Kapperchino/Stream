@@ -15,6 +15,7 @@ import states.partitions.PartitionManager;
 import states.state.PartitionStateMachine;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -35,8 +36,8 @@ public class SnapshotHelper {
         var output = objectMapper.writeValueAsString(manager);
         return CompletableFuture.supplyAsync(() -> {
             final File snapshotFile = storage.getSnapshotFile(last.getTerm(), last.getIndex());
-            try (ObjectOutputStream out = new ObjectOutputStream(new BufferedOutputStream(new FileOutputStream(snapshotFile)))) {
-                out.writeChars(output);
+            try (var out = new BufferedOutputStream(new FileOutputStream(snapshotFile))) {
+                out.write(output.getBytes(StandardCharsets.UTF_8));
             } catch (IOException ioe) {
                 log.warn("Failed to write snapshot file \"" + snapshotFile
                         + "\", last applied index=" + last);
@@ -64,12 +65,12 @@ public class SnapshotHelper {
         return CompletableFuture.supplyAsync(() -> {
             final TermIndex last = SimpleStateMachineStorage.getTermIndexFromSnapshotFile(snapshotFile);
             try (AutoCloseableLock writeLock = writeLock();
-                 ObjectInputStream in = new ObjectInputStream(
-                         new BufferedInputStream(new FileInputStream(snapshotFile)))) {
+                 InputStream in = new BufferedInputStream(new FileInputStream(snapshotFile))) {
                 if (reload) {
                     reset();
                 }
                 //TODO:Serialize here
+                stateMachine.partitionManager = objectMapper.readValue(in, PartitionManager.class);
                 stateMachine.setLastAppliedTermIndex(last);
             } catch (Exception e) {
                 log.error("Issues loading snapshot: ", e);

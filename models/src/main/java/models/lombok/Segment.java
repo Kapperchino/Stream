@@ -1,6 +1,7 @@
 package models.lombok;
 
 import lombok.*;
+import lombok.extern.jackson.Jacksonized;
 
 import javax.annotation.concurrent.Immutable;
 import java.nio.file.Path;
@@ -8,6 +9,7 @@ import java.nio.file.Path;
 @Builder
 @Data
 @Immutable
+@Jacksonized
 public class Segment {
     @NonNull
     Path relativePath;

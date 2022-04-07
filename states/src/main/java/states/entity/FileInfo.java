@@ -1,8 +1,10 @@
 package states.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.SneakyThrows;
+import com.fasterxml.jackson.annotation.*;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
@@ -30,9 +32,16 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 @Slf4j
+@NoArgsConstructor
+@JsonTypeInfo(use=JsonTypeInfo.Id.NAME, include= JsonTypeInfo.As.WRAPPER_OBJECT, property="type")
+@JsonSubTypes({
+        @JsonSubTypes.Type(value=FileInfo.UnderConstruction.class, name="UnderConstruction"),
+        @JsonSubTypes.Type(value=FileInfo.ReadOnly.class, name="ReadOnly")
+})
 abstract class FileInfo {
     @JsonProperty
-    private final Path relativePath;
+    @JsonDeserialize
+    private Path relativePath;
 
     FileInfo(Path relativePath) {
         this.relativePath = relativePath;
@@ -77,6 +86,11 @@ abstract class FileInfo {
                 "File " + getRelativePath() + " is not under construction.");
     }
 
+    @AllArgsConstructor
+    @Builder
+    @JsonDeserialize(builder = ReadOnly.ReadOnlyBuilder.class)
+    @JsonTypeName("ReadOnly")
+    @JsonIgnoreProperties({ "relativePath"})
     static class ReadOnly extends FileInfo {
         @JsonProperty
         private final long committedSize;
@@ -100,6 +114,9 @@ abstract class FileInfo {
         }
     }
 
+    @Builder
+    @AllArgsConstructor
+    @JsonDeserialize(builder = WriteInfo.WriteInfoBuilder.class)
     static class WriteInfo {
         /**
          * Future to make sure that each commit is executed after the corresponding write.
@@ -134,14 +151,19 @@ abstract class FileInfo {
         }
     }
 
+    @AllArgsConstructor
+    @Builder
+    @JsonDeserialize(builder = UnderConstruction.UnderConstructionBuilder.class)
+    @JsonTypeName("UnderConstruction")
+    @JsonIgnoreProperties({ "relativePath"})
     static class UnderConstruction extends FileInfo {
         /**
          * A queue to make sure that the writes are in order.
          */
-        private final TaskQueue writeQueue = new TaskQueue("writeQueue");
+        private TaskQueue writeQueue = new TaskQueue("writeQueue");
         @JsonProperty
-        private final Map<Long, WriteInfo> writeInfoMap = new ConcurrentHashMap<>();
-        private final AtomicLong lastWriteIndex = new AtomicLong(-1L);
+        private Map<Long, WriteInfo> writeInfoMap = new ConcurrentHashMap<>();
+        private AtomicLong lastWriteIndex = new AtomicLong(-1L);
         @JsonIgnore
         private FileStore.FileStoreDataChannel out;
         /**

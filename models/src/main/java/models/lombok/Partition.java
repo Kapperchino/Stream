@@ -1,10 +1,12 @@
 package models.lombok;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.protobuf.CodedOutputStream;
 import lombok.Builder;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.extern.jackson.Jacksonized;
 import models.proto.record.RecordOuterClass.Record;
 
 import java.nio.file.Paths;
@@ -14,6 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Data
 @Builder
+@Jacksonized
 public class Partition {
     @NonNull
     Map<Integer, Segment> segmentMap;
@@ -25,10 +28,12 @@ public class Partition {
     @NonNull
     String topic;
 
+    @JsonIgnore
     public Segment getLastSegment() {
         return segmentMap.get(segmentMap.size() - 1);
     }
 
+    @JsonIgnore
     public RecordInfo getLastRecord() {
         return recordInfoMap.get(recordInfoMap.size() - 1);
     }
@@ -62,6 +67,7 @@ public class Partition {
         return recordInfoMap.get(offset);
     }
 
+    @JsonIgnore
     public Segment addSegment() {
         int i = segmentMap.size() - 1;
         var segment = Segment.builder()

@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import lombok.NoArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import models.lombok.Partition;
@@ -46,6 +47,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 @Slf4j
+@NoArgsConstructor
 public class PartitionManager {
     //TODO: Serialize this map to a proto, load from MetaData folder at startup
     @JsonProperty
@@ -280,16 +282,6 @@ public class PartitionManager {
     private int getRecordSize(Record record) {
         int size = record.getSerializedSize();
         return size + CodedOutputStream.computeUInt32SizeNoTag(size);
-    }
-
-    private int calculateBytesToRead(int numRecords, int startingOffset, Partition partition) {
-        var endingRec = partition.getRecord(startingOffset + numRecords);
-        var curSize = 0;
-        for (int x = startingOffset; x < startingOffset + numRecords && curSize < Config.MAX_RECORD_READ; x++) {
-            var info = partition.getRecord(x);
-            curSize += info.getSize();
-        }
-        return curSize;
     }
 
 }
