@@ -145,6 +145,7 @@ public class PartitionManager {
                 offset += getRecordSize(record);
                 x++;
             }
+            x--;
             segment.setSize(offset);
             var shouldClose = offset >= Config.MAX_SIZE_PER_SEG;
             var writeFile = WriteFileMeta.builder()
@@ -246,7 +247,7 @@ public class PartitionManager {
         var futures = ImmutableList.<CompletableFuture<ReadReplyProto>>builder();
         for (var seg : fileList.build()) {
             var f =
-                    store.read(seg.getRelativePath().toString(), fileOffset, seg.getSize(), true);
+                    store.read(seg.getRelativePath(), fileOffset, seg.getSize() - fileOffset, true);
             futures.add(f);
         }
         var results = ConsumeResponse.newBuilder();
