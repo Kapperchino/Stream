@@ -9,7 +9,6 @@ import lombok.NonNull;
 import lombok.extern.jackson.Jacksonized;
 import models.proto.record.RecordOuterClass.Record;
 
-import java.nio.file.Paths;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;

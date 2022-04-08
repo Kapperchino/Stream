@@ -10,7 +10,6 @@ import states.FileStoreCommon;
 import states.entity.FileStore;
 
 import java.io.IOException;
-import java.nio.file.Path;
 
 @Slf4j
 public class FileStoreSerializer extends StdSerializer<FileStore> {

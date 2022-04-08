@@ -11,7 +11,6 @@ import models.proto.requests.PublishRequestOuterClass.PublishRequest;
 import models.proto.requests.ReadRequestOuterClass.ReadRequest;
 import models.proto.requests.WriteRequestOuterClass.WriteRequest;
 import models.proto.responses.AddPartitionResponseOuterClass.AddPartitionResponse;
-import models.proto.responses.ConsumeResponseOuterClass;
 import models.proto.responses.ConsumeResponseOuterClass.ConsumeResponse;
 import models.proto.responses.PublishResponseOuterClass.PublishResponse;
 import org.apache.ratis.client.RaftClient;

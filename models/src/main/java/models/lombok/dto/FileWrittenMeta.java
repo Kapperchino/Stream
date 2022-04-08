@@ -1,6 +1,5 @@
 package models.lombok.dto;
 
-import com.google.protobuf.ByteString;
 import lombok.Builder;
 import lombok.Value;
 

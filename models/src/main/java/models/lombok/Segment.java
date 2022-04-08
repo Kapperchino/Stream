@@ -1,10 +1,12 @@
 package models.lombok;
 
-import lombok.*;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NonNull;
+import lombok.Setter;
 import lombok.extern.jackson.Jacksonized;
 
 import javax.annotation.concurrent.Immutable;
-import java.nio.file.Path;
 
 @Builder
 @Data

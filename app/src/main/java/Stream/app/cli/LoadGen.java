@@ -2,12 +2,10 @@ package Stream.app.cli;
 
 import Stream.app.FileStoreClient;
 import Stream.app.ProducerClient;
-import Stream.app.cli.Client;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 import org.apache.ratis.thirdparty.io.netty.buffer.ByteBuf;
 import org.apache.ratis.thirdparty.io.netty.buffer.PooledByteBufAllocator;
-
 
 import java.io.File;
 import java.io.FileInputStream;

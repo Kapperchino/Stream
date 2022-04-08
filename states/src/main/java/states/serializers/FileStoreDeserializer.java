@@ -1,28 +1,20 @@
 package states.serializers;
 
 import com.fasterxml.jackson.core.JacksonException;
-import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.WritableTypeId;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import com.fasterxml.jackson.databind.jsontype.TypeSerializer;
 import com.google.common.collect.ImmutableList;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.protocol.RaftPeerId;
 import org.apache.ratis.util.JavaUtils;
-import states.entity.FileInfo;
 import states.entity.FileStore;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
-
-import static com.fasterxml.jackson.core.JsonToken.START_OBJECT;
 
 @Slf4j
 public class FileStoreDeserializer extends StdDeserializer<FileStore> {
