@@ -71,7 +71,7 @@ public class Partition {
     public Segment addSegment() {
         int i = segmentMap.size() - 1;
         var segment = Segment.builder()
-                .relativePath(Paths.get(getFileName(topic, partitionId, i + 1)))
+                .relativePath(getFileName(topic, partitionId, i + 1))
                 .segmentId(i + 1)
                 .build();
         segmentMap.put(i + 1, segment);

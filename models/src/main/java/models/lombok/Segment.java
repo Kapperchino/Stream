@@ -12,7 +12,7 @@ import java.nio.file.Path;
 @Jacksonized
 public class Segment {
     @NonNull
-    Path relativePath;
+    String relativePath;
     int segmentId;
     //where the last byte is
     //todo: make this int immutable

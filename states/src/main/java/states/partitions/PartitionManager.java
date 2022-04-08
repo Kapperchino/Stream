@@ -77,7 +77,7 @@ public class PartitionManager {
         }
         var segmentMap = new ConcurrentHashMap<Integer, Segment>();
         var segment = Segment.builder()
-                .relativePath(Paths.get(String.format("%s/%s/0", topicName, id)))
+                .relativePath(String.format("%s/%s/0", topicName, id))
                 .segmentId(0)
                 .build();
         var fileMeta = WriteFileMeta.builder()
@@ -152,7 +152,7 @@ public class PartitionManager {
             var shouldClose = offset >= Config.MAX_SIZE_PER_SEG;
             var writeFile = WriteFileMeta.builder()
                     .index((int) index)
-                    .path(segment.getRelativePath().toString())
+                    .path(segment.getRelativePath())
                     .close(shouldClose)
                     .sync(true)
                     .offset(startingOffset)

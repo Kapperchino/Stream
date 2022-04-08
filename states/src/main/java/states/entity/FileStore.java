@@ -22,6 +22,8 @@ import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.util.*;
 import org.apache.ratis.util.function.CheckedSupplier;
 import states.FileStoreCommon;
+import states.serializers.FileStoreDeserializer;
+import states.serializers.FileStoreSerializer;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -39,28 +41,28 @@ import java.util.function.Supplier;
 @Data
 @Builder
 @AllArgsConstructor
-@Jacksonized
+@JsonSerialize(using = FileStoreSerializer.class)
+@JsonDeserialize(using = FileStoreDeserializer.class)
 public class FileStore implements Closeable {
-    @JsonIgnore
+    @JsonProperty
     private final Supplier<RaftPeerId> idSupplier;
-    @JsonIgnore
+    @JsonProperty
     private final List<Supplier<Path>> rootSuppliers;
     @JsonProperty
     private final FileMap files;
-    @JsonIgnore
-    @Builder.Default
-    private ExecutorService writer = Executors.newFixedThreadPool(10);
-    @JsonIgnore
-    @Builder.Default
-    private ExecutorService committer = Executors.newFixedThreadPool(10);;
-    @JsonIgnore
-    @Builder.Default
-    private ExecutorService reader = Executors.newFixedThreadPool(10);;
-    @JsonIgnore
-    @Builder.Default
-    private ExecutorService deleter= Executors.newFixedThreadPool(10);;
+    @JsonProperty
+    private ExecutorService writer;
+    @JsonProperty
+    private ExecutorService committer;
+    @JsonProperty
+    private ExecutorService reader;
+    @JsonProperty
+    private ExecutorService deleter;
+    @JsonProperty
+    private RaftProperties properties;
 
     public FileStore(Supplier<RaftPeerId> idSupplier, RaftProperties properties) {
+        this.properties = properties;
         this.idSupplier = idSupplier;
         this.rootSuppliers = new ArrayList<>();
         int writeThreadNum = ConfUtils.getInt(properties::getInt, FileStoreCommon.STATEMACHINE_WRITE_THREAD_NUM,
@@ -267,7 +269,9 @@ public class FileStore implements Closeable {
 
     @AllArgsConstructor
     @NoArgsConstructor
-    static class FileMap {
+    @JsonSerialize
+    @JsonDeserialize
+    public static class FileMap {
         @JsonProperty
         private Object name;
 

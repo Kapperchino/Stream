@@ -15,6 +15,8 @@ import org.apache.ratis.util.TaskQueue;
 import org.apache.ratis.util.function.CheckedFunction;
 import org.apache.ratis.util.function.CheckedSupplier;
 import states.FileStoreCommon;
+import states.serializers.UnderConstructionDeserializer;
+import states.serializers.UnderConstructionSerializer;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -32,16 +34,16 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 @Slf4j
+@SuperBuilder
 @NoArgsConstructor
-@JsonTypeInfo(use=JsonTypeInfo.Id.NAME, include= JsonTypeInfo.As.WRAPPER_OBJECT, property="type")
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT, property = "type")
 @JsonSubTypes({
-        @JsonSubTypes.Type(value=FileInfo.UnderConstruction.class, name="UnderConstruction"),
-        @JsonSubTypes.Type(value=FileInfo.ReadOnly.class, name="ReadOnly")
+        @JsonSubTypes.Type(value = FileInfo.UnderConstruction.class, name = "UnderConstruction"),
+        @JsonSubTypes.Type(value = FileInfo.ReadOnly.class, name = "ReadOnly")
 })
-abstract class FileInfo {
+public abstract class FileInfo {
     @JsonProperty
-    @JsonDeserialize
-    private Path relativePath;
+    protected Path relativePath;
 
     FileInfo(Path relativePath) {
         this.relativePath = relativePath;
@@ -87,10 +89,9 @@ abstract class FileInfo {
     }
 
     @AllArgsConstructor
-    @Builder
+    @SuperBuilder
     @JsonDeserialize(builder = ReadOnly.ReadOnlyBuilder.class)
     @JsonTypeName("ReadOnly")
-    @JsonIgnoreProperties({ "relativePath"})
     static class ReadOnly extends FileInfo {
         @JsonProperty
         private final long committedSize;
@@ -117,7 +118,7 @@ abstract class FileInfo {
     @Builder
     @AllArgsConstructor
     @JsonDeserialize(builder = WriteInfo.WriteInfoBuilder.class)
-    static class WriteInfo {
+    public static class WriteInfo {
         /**
          * Future to make sure that each commit is executed after the corresponding write.
          */
@@ -151,12 +152,14 @@ abstract class FileInfo {
         }
     }
 
+    @EqualsAndHashCode(callSuper = true)
     @AllArgsConstructor
-    @Builder
-    @JsonDeserialize(builder = UnderConstruction.UnderConstructionBuilder.class)
+    @SuperBuilder
+    @Data
+    @JsonDeserialize(using = UnderConstructionDeserializer.class)
+    @JsonSerialize(using = UnderConstructionSerializer.class)
     @JsonTypeName("UnderConstruction")
-    @JsonIgnoreProperties({ "relativePath"})
-    static class UnderConstruction extends FileInfo {
+    public static class UnderConstruction extends FileInfo {
         /**
          * A queue to make sure that the writes are in order.
          */
@@ -187,13 +190,17 @@ abstract class FileInfo {
         }
 
         @Override
-        long getCommittedSize() {
+        public long getCommittedSize() {
             return committedSize;
         }
 
         @Override
-        long getWriteSize() {
+        public long getWriteSize() {
             return writeSize;
+        }
+
+        public Path getRelativePath() {
+            return relativePath;
         }
 
         CompletableFuture<Integer> submitCreate(
