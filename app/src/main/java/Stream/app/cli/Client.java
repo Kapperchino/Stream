@@ -1,25 +1,17 @@
 package Stream.app.cli;
 
-import Stream.app.FileStoreClient;
-import Stream.app.ProducerClient;
 import com.beust.jcommander.Parameter;
 import org.apache.ratis.RaftConfigKeys;
-import org.apache.ratis.client.RaftClient;
 import org.apache.ratis.client.RaftClientConfigKeys;
 import org.apache.ratis.conf.RaftProperties;
 import org.apache.ratis.datastream.SupportedDataStreamType;
 import org.apache.ratis.grpc.GrpcConfigKeys;
-import org.apache.ratis.grpc.GrpcFactory;
-import org.apache.ratis.protocol.ClientId;
-import org.apache.ratis.protocol.RaftGroup;
-import org.apache.ratis.protocol.RaftGroupId;
-import org.apache.ratis.protocol.RaftPeer;
 import org.apache.ratis.rpc.SupportedRpcType;
 import org.apache.ratis.server.RaftServerConfigKeys;
-import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.util.FileUtils;
 import org.apache.ratis.util.SizeInBytes;
 import org.apache.ratis.util.TimeDuration;
+import stream.client.BaseClient;
 
 import java.io.File;
 import java.io.IOException;
@@ -87,58 +79,15 @@ public abstract class Client extends SubCommandBase {
             FileUtils.createDirectories(dir);
         }
 
-        streamOperation(getProducerClients(raftProperties));
+        streamOperation(getClients(raftProperties,numClients));
     }
 
-    public List<FileStoreClient> getClients(RaftProperties raftProperties) {
-        List<FileStoreClient> fileStoreClients = new ArrayList<>();
-        for (int i = 0; i < numClients; i++) {
-            final RaftGroup raftGroup = RaftGroup.valueOf(RaftGroupId.valueOf(ByteString.copyFromUtf8(getRaftGroupId())),
-                    getPeers());
-
-            RaftClient.Builder builder =
-                    RaftClient.newBuilder().setProperties(raftProperties);
-            builder.setRaftGroup(raftGroup);
-            builder.setClientRpc(
-                    new GrpcFactory(new org.apache.ratis.conf.Parameters())
-                            .newRaftClientRpc(ClientId.randomId(), raftProperties));
-            RaftPeer[] peers = getPeers();
-            builder.setPrimaryDataStreamServer(peers[0]);
-            RaftClient client = builder.build();
-            fileStoreClients.add(new FileStoreClient(client));
-        }
-        return fileStoreClients;
+    protected List<BaseClient> getClients(RaftProperties raftProperties, int numClients) {
+        return null;
     }
 
-    public List<ProducerClient> getProducerClients(RaftProperties raftProperties) {
-        List<ProducerClient> producerClients = new ArrayList<>();
-        for (int i = 0; i < numClients; i++) {
-            final RaftGroup raftGroup = RaftGroup.valueOf(RaftGroupId.valueOf(ByteString.copyFromUtf8(getRaftGroupId())),
-                    getPeers());
-
-            RaftClient.Builder builder =
-                    RaftClient.newBuilder().setProperties(raftProperties);
-            builder.setRaftGroup(raftGroup);
-            builder.setClientRpc(
-                    new GrpcFactory(new org.apache.ratis.conf.Parameters())
-                            .newRaftClientRpc(ClientId.randomId(), raftProperties));
-            RaftPeer[] peers = getPeers();
-            builder.setPrimaryDataStreamServer(peers[0]);
-            RaftClient client = builder.build();
-            producerClients.add(new ProducerClient(client));
-        }
-        return producerClients;
-    }
-
-    protected void stop(List<FileStoreClient> clients) throws IOException {
-        for (FileStoreClient client : clients) {
-            client.close();
-        }
-        System.exit(0);
-    }
-
-    protected void stopProducers(List<ProducerClient> clients) throws IOException {
-        for (ProducerClient client : clients) {
+    protected void stopClients(List<BaseClient> clients) throws IOException {
+        for (var client : clients) {
             client.close();
         }
         System.exit(0);
@@ -208,9 +157,6 @@ public abstract class Client extends SubCommandBase {
         return offset;
     }
 
-    protected abstract void operation(List<FileStoreClient> clients)
-            throws IOException, ExecutionException, InterruptedException;
-
-    protected abstract void streamOperation(List<ProducerClient> clients)
+    protected abstract void streamOperation(List<BaseClient> clients)
             throws IOException, ExecutionException, InterruptedException;
 }

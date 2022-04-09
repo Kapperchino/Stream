@@ -14,8 +14,6 @@ public final class FileStore {
     public static List<SubCommandBase> getSubCommands() {
         List<SubCommandBase> commands = new ArrayList<>();
         commands.add(new Server());
-        commands.add(new LoadGen());
-        commands.add(new DataStream());
         commands.add(new Producer());
         commands.add(new Consumer());
         return commands;

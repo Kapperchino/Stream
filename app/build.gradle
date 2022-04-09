@@ -17,7 +17,7 @@ publishing {
             from components.java
             groupId = 'kapperchino'
             artifactId = 'stream'
-            version = '0.11'
+            version = '0.13'
         }
     }
     repositories {
@@ -53,8 +53,9 @@ repositories {
 
 dependencies {
     implementation "kapperchino:stream-deps:0.33"
-    implementation project(path: ':utilities')
-    implementation project(path: ':states')
+    implementation project(path: ':utilities',configuration: 'shadow')
+    implementation project(path: ':client')
+    implementation project(path: ':states',configuration: 'shadow')
     implementation project(path: ':models', configuration: 'shadow')
 }
 
