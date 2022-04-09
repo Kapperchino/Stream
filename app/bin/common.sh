@@ -28,7 +28,7 @@ else
    if [[ -d "$EXAMPLES_DIR" ]]; then
       EXAMPLES_DIR=`cd ${EXAMPLES_DIR} > /dev/null; pwd`
    fi
-   JAR_PREFIX=`basename 'app-all'`
+   JAR_PREFIX=`basename 'stream'`
    ARTIFACT=`ls -1 ${EXAMPLES_DIR}/build/libs/${JAR_PREFIX}.jar | grep -v test | grep -v javadoc | grep -v sources | grep -v shaded`
    if [[ ! -f "$ARTIFACT" ]]; then
       echo "Jar file is missing. Please do a full build (mvn clean package -DskipTests) first."

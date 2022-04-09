@@ -9,6 +9,7 @@ plugins {
     id 'maven-publish'
 }
 
+jar.enabled = false
 
 publishing {
     publications {
@@ -16,7 +17,7 @@ publishing {
             from components.java
             groupId = 'kapperchino'
             artifactId = 'stream'
-            version = '0.1'
+            version = '0.11'
         }
     }
     repositories {
@@ -60,4 +61,10 @@ dependencies {
 application {
     // Define the main class for the application.
     mainClass = 'Stream.app.Runner'
+}
+
+shadowJar {
+    archiveBaseName.set('stream')
+    archiveClassifier.set('')
+    archiveVersion.set('')
 }
