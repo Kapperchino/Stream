@@ -19,8 +19,8 @@ import org.apache.ratis.util.LifeCycle;
 import org.apache.ratis.util.NetUtils;
 import org.apache.ratis.util.SizeInBytes;
 import org.apache.ratis.util.TimeDuration;
-import states.FileStoreCommon;
-import states.state.PartitionStateMachine;
+import stream.states.FileStoreCommon;
+import stream.states.state.PartitionStateMachine;
 
 import java.io.File;
 import java.util.ArrayList;

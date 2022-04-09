@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+option java_generate_equals_and_hash = true;
+import "PublishRequestHeader.proto";
+import "Record.proto";
+option java_package = "stream.models.proto.requests";
+
+
+message PublishRequestData {
+  repeated Record data = 1;
+}
+

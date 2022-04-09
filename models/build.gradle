@@ -34,9 +34,9 @@ sourceSets {
             srcDirs 'build/generated'
         }
         proto {
-            srcDirs 'src/main/java/models/proto/record'
-            srcDirs 'src/main/java/models/proto/requests'
-            srcDirs 'src/main/java/models/proto/responses'
+            srcDirs 'src/main/java/stream/models/proto/record'
+            srcDirs 'src/main/java/stream/models/proto/requests'
+            srcDirs 'src/main/java/stream/models/proto/responses'
             include '**/*.protodevel'
         }
     }

@@ -12,7 +12,7 @@ import org.apache.ratis.util.JavaUtils;
 import org.apache.ratis.util.Preconditions;
 import org.apache.ratis.util.ProtoUtils;
 import org.apache.ratis.util.function.CheckedFunction;
-import states.FileStoreCommon;
+import stream.states.FileStoreCommon;
 
 import java.io.Closeable;
 import java.io.IOException;

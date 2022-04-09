@@ -1,0 +1,13 @@
+syntax = "proto3";
+option java_package = "stream.models.proto.requests";
+option java_generate_equals_and_hash = true;
+import "ConsumeRequest.proto";
+import "GetMetaDataRequest.proto";
+
+message ReadRequest {
+  oneof request {
+    ConsumeRequest consume = 1;
+    GetMetaDataRequest metaData = 2;
+  }
+}
+

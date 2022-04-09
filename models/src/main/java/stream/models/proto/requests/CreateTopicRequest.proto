@@ -1,0 +1,10 @@
+syntax = "proto3";
+option java_package = "stream.models.proto.requests";
+option java_generate_equals_and_hash = true;
+
+message CreateTopicRequest {
+  string topic = 1;
+  int64 partitions = 2;
+  int64 offset = 3;
+}
+

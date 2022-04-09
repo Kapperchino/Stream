@@ -1,0 +1,13 @@
+syntax = "proto3";
+option java_generate_equals_and_hash = true;
+import "Record.proto";
+option java_package = "stream.models.proto.record";
+
+
+message RecordResult {
+  Record record = 1;
+  int64 offset = 2;
+  int64 partition = 3;
+  string topic = 4;
+}
+
