@@ -6,6 +6,28 @@ plugins {
     id 'Stream.java-application-conventions'
     id "io.freefair.lombok" version "6.3.0"
     id 'com.github.johnrengelman.shadow' version '7.1.2'
+    id 'maven-publish'
+}
+
+
+publishing {
+    publications {
+        shadow(MavenPublication) { publication ->
+            from components.java
+            groupId = 'kapperchino'
+            artifactId = 'stream'
+            version = '0.1'
+        }
+    }
+    repositories {
+        maven {
+            url = "https://maven.pkg.github.com/Kapperchino/Stream"
+            credentials {
+                username = project.properties['usr']
+                password = project.properties['pwd']
+            }
+        }
+    }
 }
 
 repositories {
@@ -14,7 +36,6 @@ repositories {
         credentials {
             username = project.properties['usr']
             password = project.properties['pwd']
-            println(password);
         }
     }
 }
