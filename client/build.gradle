@@ -1,9 +1,11 @@
 plugins {
     id 'java'
     id "io.freefair.lombok" version "6.3.0"
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
+    id 'maven-publish'
 }
 
-version 'unspecified'
+project.version = 0.173
 
 repositories {
     mavenCentral()
@@ -14,6 +16,30 @@ java {
         languageVersion.set(JavaLanguageVersion.of(11))
     }
 }
+
+configurations.archives.artifacts.clear()
+artifacts {
+    add("archives", shadowJar)
+}
+
+
+publishing {
+    publications {
+        shadow(MavenPublication) { publication ->
+            project.shadow.component(publication)
+        }
+    }
+    repositories {
+        maven {
+            url = "https://maven.pkg.github.com/Kapperchino/Stream"
+            credentials {
+                username = project.properties['usr']
+                password = project.properties['pwd']
+            }
+        }
+    }
+}
+
 
 repositories {
     maven {
@@ -28,10 +54,15 @@ repositories {
 dependencies {
     implementation "kapperchino:stream-deps:0.33"
     implementation project(path: ':models', configuration: 'shadow')
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
 }
 
-test {
-    useJUnitPlatform()
+
+shadowJar {
+    minimize()
+    mergeServiceFiles()
+    project.configurations.implementation.canBeResolved = true
+    configurations = [project.configurations.implementation]
+    archiveBaseName.set('stream-client')
+    archiveClassifier.set('')
+    archiveVersion.set(project.version as String)
 }

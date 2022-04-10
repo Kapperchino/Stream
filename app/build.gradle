@@ -8,16 +8,12 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '7.1.2'
     id 'maven-publish'
 }
-
-jar.enabled = false
+project.version = 0.15
 
 publishing {
     publications {
         shadow(MavenPublication) { publication ->
-            from components.java
-            groupId = 'kapperchino'
-            artifactId = 'stream'
-            version = '0.13'
+            project.shadow.component(publication)
         }
     }
     repositories {
@@ -54,7 +50,7 @@ repositories {
 dependencies {
     implementation "kapperchino:stream-deps:0.33"
     implementation project(path: ':utilities',configuration: 'shadow')
-    implementation project(path: ':client')
+    implementation project(path: ':client',configuration: 'shadow')
     implementation project(path: ':states',configuration: 'shadow')
     implementation project(path: ':models', configuration: 'shadow')
 }
@@ -65,6 +61,7 @@ application {
 }
 
 shadowJar {
+    minimize()
     archiveBaseName.set('stream')
     archiveClassifier.set('')
     archiveVersion.set('')
