@@ -225,9 +225,7 @@ public class PartitionStateMachine extends BaseStateMachine {
         switch (request.getRequestCase()) {
             case PUBLISH:
                 //TODO: add recovery features, currently when the state machines are down we lose all meta-data
-                var commit = writeCommit(index, request.getPublish().getHeader(), request.getPublish().getData());
-                SnapshotHelper.takeSnapshot(partitionManager, storage, getLastAppliedTermIndex()).get();
-                return commit;
+                return writeCommit(index, request.getPublish().getHeader(), request.getPublish().getData());
             case ADDPARTITION:
                 return addPartition(index, request.getAddPartition());
             case CREATETOPIC:
