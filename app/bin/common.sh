@@ -38,7 +38,6 @@ fi
 
 echo "Found ${ARTIFACT}"
 
-QUORUM_OPTS="--peers n0:localhost:6000,n1:localhost:6001,n2:localhost:6002"
 
 CONF_DIR="$DIR/../conf"
 if [[ -d "${CONF_DIR}" ]]; then

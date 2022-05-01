@@ -22,11 +22,13 @@ RUN chmod +x /usr/local/bin/dumb-init
 RUN mkdir -p /etc/security/keytabs && chmod -R a+wr /etc/security/keytabs
 ADD https://repo.maven.apache.org/maven2/org/jboss/byteman/byteman/4.0.4/byteman-4.0.4.jar /opt/byteman.jar
 RUN chmod o+r /opt/byteman.jar
-ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/
 ENV PATH $PATH:/opt/ratis/bin
 
 RUN apt-get install -y jsvc
 ENV JSVC_HOME=/usr/bin
+
+COPY build/libs/stream.jar /home/build/libs/stream.jar
+COPY bin/ /home/bin
 
 RUN addgroup --gid 1000 ratis
 RUN adduser --disabled-password --gecos "" --uid 1000 ratis --gid 100 --home /opt/ratis
@@ -37,3 +39,6 @@ WORKDIR /opt/ratis
 
 VOLUME /data
 USER ratis
+
+ENTRYPOINT []
+

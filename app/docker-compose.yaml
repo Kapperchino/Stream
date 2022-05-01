@@ -1,0 +1,144 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+version: "3"
+services:
+  server1:
+    image: stream:0.1
+    container_name: n0
+    hostname: n0
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9864
+    command: [ "/home/bin/server.sh", "filestore", "server",
+               "--id", "n0", "--storage", "/tmp/data",
+               "--peers", "n0:n0:9864,n1:n1:9864,n2:n2:9864",
+               "--raftGroup", "shard_group_0000" ]
+
+  server2:
+    image: stream:0.1
+    container_name: n1
+    hostname: n1
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9864
+    command: [ "/home/bin/server.sh", "filestore", "server",
+               "--id", "n1", "--storage", "/tmp/data",
+               "--peers", "n0:n0:9864,n1:n1:9864,n2:n2:9864",
+               "--raftGroup", "shard_group_0000" ]
+
+  server3:
+    image: stream:0.1
+    container_name: n2
+    hostname: n2
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9864
+    command: [ "/home/bin/server.sh", "filestore", "server",
+               "--id", "n2", "--storage", "/tmp/data",
+               "--peers", "n0:n0:9864,n1:n1:9864,n2:n2:9864",
+               "--raftGroup", "shard_group_0000" ]
+
+  server4:
+    image: stream:0.1
+    container_name: n3
+    hostname: n3
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9865
+    command: [ "/home/bin/server.sh", "filestore", "server",
+               "--id", "n3", "--storage", "/tmp/data",
+               "--peers", "n3:n3:9865,n4:n4:9865,n5:n5:9865",
+               "--raftGroup", "shard_group_0001" ]
+
+  server5:
+    image: stream:0.1
+    container_name: n4
+    hostname: n4
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9865
+    command: [ "/home/bin/server.sh", "filestore", "server",
+               "--id", "n4", "--storage", "/tmp/data",
+               "--peers", "n3:n3:9865,n4:n4:9865,n5:n5:9865",
+               "--raftGroup", "shard_group_0001" ]
+
+  server6:
+    image: stream:0.1
+    container_name: n5
+    hostname: n5
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9865
+    command: [ "/home/bin/server.sh", "filestore", "server",
+               "--id", "n5", "--storage", "/tmp/data",
+               "--peers", "n3:n3:9865,n4:n4:9865,n5:n5:9865",
+               "--raftGroup", "shard_group_0001" ]
+
+  server7:
+    image: stream-infra:0.1
+    container_name: n6
+    hostname: n6
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9866
+    command: [ "/home/bin/server.sh", "infra", "server",
+               "--id", "n6", "--storage", "/tmp/data",
+               "--peers", "n6:n6:9866,n7:n7:9866,n8:n8:9866",
+               "--raftGroup", "shard_group_0002" ]
+
+  server8:
+    image: stream-infra:0.1
+    container_name: n7
+    hostname: n7
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9866
+    command: [ "/home/bin/server.sh", "infra", "server",
+               "--id", "n7", "--storage", "/tmp/data",
+               "--peers", "n6:n6:9866,n7:n7:9866,n8:n8:9866",
+               "--raftGroup", "shard_group_0002" ]
+
+  server9:
+    image: stream-infra:0.1
+    container_name: n8
+    hostname: n8
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9866
+    command: [ "/home/bin/server.sh", "infra", "server",
+               "--id", "n8", "--storage", "/tmp/data",
+               "--peers", "n6:n6:9866,n7:n7:9866,n8:n8:9866",
+               "--raftGroup", "shard_group_0002" ]
+
+  client:
+    image: stream:0.1
+    container_name: client
+    hostname: client
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9864
+    command: [ "sleep", "infinity" ]

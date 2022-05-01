@@ -18,7 +18,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 USAGE="start-all.sh <example> <subcommand>"
 
-if [ "$#" -ne 2 ]; then
+if [ "$#" -ne 3 ]; then
   echo "$USAGE"
   exit 1
 fi
@@ -32,14 +32,18 @@ shift
 subcommand="$1"
 shift
 
+peers="$1"
+shift
+
+
 # Find a tmpdir, defaulting to what the environment tells us
 tmp="${TMPDIR:-/tmp}"
 
 echo "Starting 3 Ratis servers with '${example}' with directories in '${tmp}' as local storage"
 
 # The ID needs to be kept in sync with QUORUM_OPTS
-$DIR/server.sh "$example" "$subcommand" --id n0 --storage "${tmp}/n0" $QUORUM_OPTS &
-$DIR/server.sh "$example" "$subcommand" --id n1 --storage "${tmp}/n1" $QUORUM_OPTS &
-$DIR/server.sh "$example" "$subcommand" --id n2 --storage "${tmp}/n2" $QUORUM_OPTS &
+$DIR/server.sh "$example" "$subcommand" --id n0 --storage "${tmp}/n0" --peers $peers &
+$DIR/server.sh "$example" "$subcommand" --id n1 --storage "${tmp}/n1" --peers $peers &
+$DIR/server.sh "$example" "$subcommand" --id n2 --storage "${tmp}/n2" --peers $peers &
 
 echo "Waiting for the servers"
