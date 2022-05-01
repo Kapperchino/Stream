@@ -117,7 +117,7 @@ public class PartitionStateMachine extends BaseStateMachine {
 
     @Override
     public TransactionContext startTransaction(RaftClientRequest request) throws IOException {
-        log.info("incoming transactiono: {}", request);
+        log.info("incoming transaction: {}", request);
         final ByteString content = request.getMessage().getContent();
         final var proto = WriteRequest.parseFrom(content.toByteArray());
         final TransactionContext.Builder b = TransactionContext.newBuilder()

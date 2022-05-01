@@ -61,7 +61,6 @@ application {
 }
 
 shadowJar {
-    minimize()
     archiveBaseName.set('stream')
     archiveClassifier.set('')
     archiveVersion.set('')

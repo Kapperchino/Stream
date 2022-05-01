@@ -33,7 +33,7 @@ public abstract class SubCommandBase {
 
     @Parameter(names = {"--raftGroup",
             "-g"}, description = "Raft group identifier")
-    private String raftGroupId = "demoRaftGroup123";
+    private String raftGroupId = "shard_group_0000";
 
     @Parameter(names = {"--peers", "-r"}, description =
             "Raft peers (format: name:host:port:dataStreamPort:clientPort:adminPort,"
