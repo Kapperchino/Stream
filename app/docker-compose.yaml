@@ -134,11 +134,21 @@ services:
                "--raftGroup", "shard_group_0002" ]
 
   client:
-    image: stream:0.1
+    image: stream-infra:0.1
     container_name: client
     hostname: client
     volumes:
       - ../../../:/opt/ratis
     ports:
       - 9864
+    command: [ "sleep", "infinity" ]
+
+  client1:
+    image: stream:0.1
+    container_name: client1
+    hostname: client1
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9865
     command: [ "sleep", "infinity" ]
