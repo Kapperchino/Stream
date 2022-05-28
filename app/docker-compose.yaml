@@ -95,7 +95,7 @@ services:
                "--raftGroup", "shard_group_0001" ]
 
   server7:
-    image: stream-infra:0.1
+    image: stream-infra:0.2
     container_name: n6
     hostname: n6
     volumes:
@@ -108,7 +108,7 @@ services:
                "--raftGroup", "shard_group_0002" ]
 
   server8:
-    image: stream-infra:0.1
+    image: stream-infra:0.2
     container_name: n7
     hostname: n7
     volumes:
@@ -121,7 +121,7 @@ services:
                "--raftGroup", "shard_group_0002" ]
 
   server9:
-    image: stream-infra:0.1
+    image: stream-infra:0.2
     container_name: n8
     hostname: n8
     volumes:
@@ -134,7 +134,7 @@ services:
                "--raftGroup", "shard_group_0002" ]
 
   client:
-    image: stream-infra:0.1
+    image: stream-infra:0.2
     container_name: client
     hostname: client
     volumes:
