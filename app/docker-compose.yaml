@@ -140,7 +140,7 @@ services:
     volumes:
       - ../../../:/opt/ratis
     ports:
-      - 9864
+      - 9867
     command: [ "sleep", "infinity" ]
 
   client1:
@@ -150,5 +150,15 @@ services:
     volumes:
       - ../../../:/opt/ratis
     ports:
-      - 9865
+      - 9869
+    command: [ "sleep", "infinity" ]
+
+  client2:
+    image: stream-client:0.1
+    container_name: client2
+    hostname: client2
+    volumes:
+      - ../../../:/opt/ratis
+    ports:
+      - 9869
     command: [ "sleep", "infinity" ]
