@@ -4,7 +4,7 @@ This is the nodes for the streams responsible for writing and reading to partiti
 - Reading from a partition(Done, needs rewrite)
 - Writing to a partition(Done)
 - Client(Done)
-- Snapshot(WIP)
+- Snapshot(Done)
 - Streaming from partition to client(TBD)
 - Streaming from client to partition(TBD)
 ## Docs
