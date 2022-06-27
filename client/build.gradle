@@ -52,7 +52,7 @@ repositories {
 }
 
 dependencies {
-    implementation "kapperchino:stream-deps:0.33"
+    implementation "kapperchino:stream-deps:0.37:dep"
     implementation project(path: ':models', configuration: 'shadow')
 }
 

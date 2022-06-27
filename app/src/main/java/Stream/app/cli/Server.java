@@ -2,6 +2,12 @@ package Stream.app.cli;
 
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
+import io.scalecube.cluster.Cluster;
+import io.scalecube.cluster.ClusterConfig;
+import io.scalecube.cluster.ClusterImpl;
+import io.scalecube.net.Address;
+import io.scalecube.transport.netty.tcp.TcpTransportFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.RaftConfigKeys;
 import org.apache.ratis.conf.ConfUtils;
 import org.apache.ratis.conf.RaftProperties;
@@ -31,6 +37,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Class to start a ratis filestore example server.
  */
+@Slf4j
 @Parameters(commandDescription = "Start an filestore server")
 public class Server extends SubCommandBase {
 
@@ -52,6 +59,12 @@ public class Server extends SubCommandBase {
 
     @Parameter(names = {"--deleteThreadNum"}, description = "Number of delete thread")
     private int deleteThreadNum = 3;
+
+    private final String SEED_NODE = "seed";
+
+    private Cluster cluster;
+
+    private final int SEED_PORT = 6969;
 
     @Override
     public void run() throws Exception {
@@ -96,10 +109,31 @@ public class Server extends SubCommandBase {
                 .setStateMachine(stateMachine).setProperties(properties)
                 .setGroup(raftGroup)
                 .build();
-
+        var isSeed = System.getenv("IS_SEED");
+        var seedDNS = System.getenv("SEED_DNS");
+        if (isSeed != null) {
+            var configWithFixedPort =
+                    new ClusterConfig()
+                            .memberAlias(SEED_NODE)
+                            .transport(opts -> opts.port(SEED_PORT));
+            cluster = new ClusterImpl()
+                    .config(opts -> configWithFixedPort)
+                    .transportFactory(TcpTransportFactory::new)
+                    .startAwait();
+            log.info("Starting a seed cluster at: {}", cluster.address());
+        } else {
+            Thread.sleep(5000);
+            cluster = new ClusterImpl()
+                    .config(opts -> opts.memberAlias(id))
+                    .membership(opts -> opts.seedMembers(Address.from(seedDNS + ":" + SEED_PORT)))
+                    .transportFactory(TcpTransportFactory::new)
+                    .startAwait();
+            log.info("Joining a seed cluster from: {} to {}", cluster.address(), seedDNS);
+        }
         raftServer.start();
 
-        for (; raftServer.getLifeCycleState() != LifeCycle.State.CLOSED; ) {
+        while (raftServer.getLifeCycleState() != LifeCycle.State.CLOSED) {
+            log.info("members in cluster: {}", cluster.members());
             TimeUnit.SECONDS.sleep(1);
         }
     }

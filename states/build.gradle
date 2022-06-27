@@ -20,14 +20,13 @@ repositories {
         credentials {
             username = project.properties['usr']
             password = project.properties['pwd']
-            println(password);
         }
     }
 }
 
 
 dependencies {
-    implementation "kapperchino:stream-deps:0.33"
+    implementation "kapperchino:stream-deps:0.37:dep"
     //move this to shared dep later
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.2.2'
     implementation project(path: ':models', configuration: 'shadow')
