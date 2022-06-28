@@ -1,5 +1,10 @@
 package stream.states.state;
 
+import io.scalecube.cluster.Cluster;
+import io.scalecube.cluster.ClusterConfig;
+import io.scalecube.cluster.ClusterImpl;
+import io.scalecube.net.Address;
+import io.scalecube.transport.netty.tcp.TcpTransportFactory;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.conf.RaftProperties;
@@ -9,9 +14,7 @@ import org.apache.ratis.proto.ExamplesProtos.FileStoreRequestProto;
 import org.apache.ratis.proto.ExamplesProtos.StreamWriteRequestProto;
 import org.apache.ratis.proto.RaftProtos.LogEntryProto;
 import org.apache.ratis.proto.RaftProtos.StateMachineLogEntryProto;
-import org.apache.ratis.protocol.Message;
-import org.apache.ratis.protocol.RaftClientRequest;
-import org.apache.ratis.protocol.RaftGroupId;
+import org.apache.ratis.protocol.*;
 import org.apache.ratis.server.RaftServer;
 import org.apache.ratis.server.protocol.TermIndex;
 import org.apache.ratis.server.storage.RaftStorage;
@@ -32,6 +35,7 @@ import stream.models.proto.requests.WriteRequestOuterClass.WriteRequest;
 import stream.models.proto.responses.ConsumeResponseOuterClass.ConsumeResponse;
 import stream.states.FileStoreCommon;
 import stream.states.entity.FileStore;
+import stream.states.metaData.MetaManager;
 import stream.states.partitions.PartitionManager;
 import stream.states.snapshot.SnapshotHelper;
 
@@ -39,6 +43,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static stream.models.proto.requests.PublishRequestOuterClass.PublishRequest;
 
@@ -48,10 +53,36 @@ public class PartitionStateMachine extends BaseStateMachine {
 
     private final FileStore files;
     public PartitionManager partitionManager;
+    private final AtomicBoolean isLeader;
+    private Cluster gossipCluster;
+    private MetaManager metaManager;
+
+    private final int SEED_PORT = 6969;
 
     public PartitionStateMachine(RaftProperties properties) {
         this.partitionManager = new PartitionManager(this::getId, properties);
         files = partitionManager.store;
+        isLeader = new AtomicBoolean(false);
+    }
+
+    @Override
+    public void notifyLeaderChanged(RaftGroupMemberId groupMemberId, RaftPeerId newLeaderId) {
+        //case where the member becomes leader
+        if (!isLeader.get()) {
+            if (newLeaderId == this.getId()) {
+                isLeader.compareAndSet(false, true);
+                gossipCluster = createGossipCluster();
+            }
+            //TODO: case where leader down, but comes back up and was a seed node
+            // currently assuming seed node does not go down
+        } else {
+            //need to shut the cluster down
+            if (newLeaderId != this.getId()) {
+                isLeader.compareAndSet(true, false);
+                gossipCluster.shutdown();
+                gossipCluster = null;
+            }
+        }
     }
 
     @SneakyThrows
@@ -258,6 +289,32 @@ public class PartitionStateMachine extends BaseStateMachine {
             return f1.thenApply(reply -> Message.valueOf(reply.toByteString()));
         }
         return null;
+    }
+
+    private Cluster createGossipCluster() {
+        var isSeed = System.getenv("IS_SEED");
+        var seedDNS = System.getenv("SEED_DNS");
+        if (isSeed != null) {
+            var configWithFixedPort =
+                    new ClusterConfig()
+                            .memberAlias(this.getGroupId().toString())
+                            .transport(opts -> opts.port(SEED_PORT));
+            var cluster = new ClusterImpl()
+                    .config(opts -> configWithFixedPort)
+                    .transportFactory(TcpTransportFactory::new)
+                    .startAwait();
+            log.info("Starting a seed cluster at: {}", cluster.address());
+            return cluster;
+        }
+        //not a seed node
+        var cluster = new ClusterImpl()
+                .config(opts -> opts.memberAlias(this.getGroupId().toString()))
+                .membership(opts -> opts.seedMembers(Address.from(seedDNS + ":" + SEED_PORT)))
+                .transportFactory(TcpTransportFactory::new)
+                .startAwait();
+        log.info("Joining a seed cluster from: {} to {}", cluster.address(), seedDNS);
+        return cluster;
+
     }
 
     private CompletableFuture<Message> streamCommit(StreamWriteRequestProto stream) {

@@ -109,27 +109,6 @@ public class Server extends SubCommandBase {
                 .setStateMachine(stateMachine).setProperties(properties)
                 .setGroup(raftGroup)
                 .build();
-        var isSeed = System.getenv("IS_SEED");
-        var seedDNS = System.getenv("SEED_DNS");
-        if (isSeed != null) {
-            var configWithFixedPort =
-                    new ClusterConfig()
-                            .memberAlias(SEED_NODE)
-                            .transport(opts -> opts.port(SEED_PORT));
-            cluster = new ClusterImpl()
-                    .config(opts -> configWithFixedPort)
-                    .transportFactory(TcpTransportFactory::new)
-                    .startAwait();
-            log.info("Starting a seed cluster at: {}", cluster.address());
-        } else {
-            Thread.sleep(5000);
-            cluster = new ClusterImpl()
-                    .config(opts -> opts.memberAlias(id))
-                    .membership(opts -> opts.seedMembers(Address.from(seedDNS + ":" + SEED_PORT)))
-                    .transportFactory(TcpTransportFactory::new)
-                    .startAwait();
-            log.info("Joining a seed cluster from: {} to {}", cluster.address(), seedDNS);
-        }
         raftServer.start();
 
         while (raftServer.getLifeCycleState() != LifeCycle.State.CLOSED) {
