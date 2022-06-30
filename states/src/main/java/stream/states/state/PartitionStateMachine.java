@@ -1,12 +1,5 @@
 package stream.states.state;
 
-import io.scalecube.cluster.Cluster;
-import io.scalecube.cluster.ClusterConfig;
-import io.scalecube.cluster.ClusterImpl;
-import io.scalecube.cluster.ClusterMessageHandler;
-import io.scalecube.cluster.membership.MembershipEvent;
-import io.scalecube.net.Address;
-import io.scalecube.transport.netty.tcp.TcpTransportFactory;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.conf.RaftProperties;
@@ -56,11 +49,10 @@ public class PartitionStateMachine extends BaseStateMachine {
     private final FileStore files;
     public PartitionManager partitionManager;
     private final AtomicBoolean isLeader;
-    private final MetaManager metaManager;
+    private MetaManager metaManager;
 
     public PartitionStateMachine(RaftProperties properties) {
         this.partitionManager = new PartitionManager(this::getId, properties);
-        this.metaManager = new MetaManager(getGroupId(), getId());
         files = partitionManager.store;
         isLeader = new AtomicBoolean(false);
     }
@@ -95,6 +87,7 @@ public class PartitionStateMachine extends BaseStateMachine {
             FileUtils.createDirectories(path);
         }
         SnapshotHelper.loadSnapShot(this, storage, false).get();
+        this.metaManager = new MetaManager(groupId, getId());
     }
 
     @SneakyThrows

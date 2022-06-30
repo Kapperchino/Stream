@@ -1,18 +1,23 @@
 package stream.states.metaData;
 
-import dagger.Module;
-import dagger.Provides;
 import io.scalecube.cluster.*;
 import io.scalecube.cluster.membership.MembershipEvent;
+import io.scalecube.cluster.transport.api.Message;
 import io.scalecube.net.Address;
 import io.scalecube.transport.netty.tcp.TcpTransportFactory;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.protocol.RaftGroupId;
 import org.apache.ratis.protocol.RaftPeerId;
 import stream.models.lombok.Topic;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutput;
+import java.io.ObjectOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 
 @Slf4j
 public class MetaManager {
@@ -23,9 +28,11 @@ public class MetaManager {
     private Cluster gossipCluster;
     private final RaftGroupId groupId;
     private final RaftPeerId id;
+    ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
     public MetaManager(RaftGroupId raftGroupId, RaftPeerId id) {
         topicMap = new ConcurrentHashMap<>();
+        membershipMap = new ConcurrentHashMap<>();
         this.id = id;
         this.groupId = raftGroupId;
     }
@@ -36,7 +43,8 @@ public class MetaManager {
     }
 
     public void shutDown() {
-
+        gossipCluster.shutdown();
+        gossipCluster = null;
     }
 
     public void startGossipCluster() {
@@ -51,8 +59,7 @@ public class MetaManager {
                 membershipMap.put(event.member().alias(), event.member());
                 break;
             case REMOVED:
-                break;
-            case LEAVING:
+                membershipMap.remove(event.member().alias());
                 break;
             case UPDATED:
                 break;
@@ -65,7 +72,7 @@ public class MetaManager {
         if (isSeed != null) {
             var configWithFixedPort =
                     new ClusterConfig()
-                            .memberAlias(id.toString())
+                            .memberAlias(groupId.toString())
                             .transport(opts -> opts.port(SEED_PORT));
             var cluster = new ClusterImpl()
                     .config(opts -> configWithFixedPort)
@@ -77,7 +84,7 @@ public class MetaManager {
         }
         //not a seed node
         var cluster = new ClusterImpl()
-                .config(opts -> opts.memberAlias(id.toString()))
+                .config(opts -> opts.memberAlias(groupId.toString()))
                 .membership(opts -> opts.seedMembers(Address.from(seedDNS + ":" + SEED_PORT)))
                 .transportFactory(TcpTransportFactory::new)
                 .handler((c) -> getHandler())
@@ -92,6 +99,25 @@ public class MetaManager {
             public void onMembershipEvent(MembershipEvent event) {
                 log.info("membership event: {}", event);
                 onMembershipChange(event);
+                executor.scheduleAtFixedRate(() -> gossipCluster
+                        .spreadGossip(Message.fromData("joe biden"))
+                        .doOnError(System.err::println)
+                        .subscribe(null, Throwable::printStackTrace)
+                        ,10, 10, TimeUnit.SECONDS);
+            }
+
+            @Override
+            public void onGossip(Message message) {
+                log.info("On gossip: {}", message);
+                var element = new ByteArrayOutputStream();
+                ObjectOutputStream stream = null;
+                try {
+                    stream = new ObjectOutputStream(element);
+                    message.writeExternal(stream);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                log.info("gossip message: {}", element.toString());
             }
         };
     }

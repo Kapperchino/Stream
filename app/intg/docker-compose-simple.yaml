@@ -17,7 +17,7 @@
 version: "3"
 services:
   server1:
-    image: stream:0.2
+    image: stream:0.21
     container_name: n0
     hostname: n0
     volumes:
@@ -33,7 +33,7 @@ services:
                "--raftGroup", "shard_group_0000" ]
 
   server2:
-    image: stream:0.2
+    image: stream:0.21
     container_name: n2
     hostname: n2
     volumes:
@@ -47,7 +47,7 @@ services:
                "--peers", "n2:n2:9865",
                "--raftGroup", "shard_group_0001" ]
   server3:
-    image: stream:0.2
+    image: stream:0.21
     container_name: n3
     hostname: n3
     volumes:
@@ -63,7 +63,7 @@ services:
 
 
   client1:
-    image: stream:0.2
+    image: stream:0.21
     container_name: client1
     hostname: client1
     volumes:
