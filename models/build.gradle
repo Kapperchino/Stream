@@ -37,6 +37,7 @@ sourceSets {
             srcDirs 'src/main/java/stream/models/proto/record'
             srcDirs 'src/main/java/stream/models/proto/requests'
             srcDirs 'src/main/java/stream/models/proto/responses'
+            srcDirs 'src/main/java/stream/models/proto/meta'
             include '**/*.protodevel'
         }
     }

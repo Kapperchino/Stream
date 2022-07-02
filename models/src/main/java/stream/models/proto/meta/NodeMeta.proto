@@ -1,0 +1,14 @@
+syntax = "proto3";
+option java_package = "stream.models.proto.meta";
+option java_generate_equals_and_hash = true;
+
+message NodeMeta {
+  string groupId = 1;
+  repeated RaftPeer peers = 2;
+}
+
+message RaftPeer {
+  string raftPeerId = 1;
+  string address = 2;
+}
+

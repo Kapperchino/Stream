@@ -1,5 +1,6 @@
 package stream.states.state;
 
+import com.google.common.collect.ImmutableList;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.conf.RaftProperties;
@@ -38,6 +39,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static stream.models.proto.requests.PublishRequestOuterClass.PublishRequest;
@@ -50,6 +52,8 @@ public class PartitionStateMachine extends BaseStateMachine {
     public PartitionManager partitionManager;
     private final AtomicBoolean isLeader;
     private MetaManager metaManager;
+    private RaftServer server;
+    private RaftGroupId id;
 
     public PartitionStateMachine(RaftProperties properties) {
         this.partitionManager = new PartitionManager(this::getId, properties);
@@ -63,6 +67,15 @@ public class PartitionStateMachine extends BaseStateMachine {
         if (!isLeader.get()) {
             if (newLeaderId == this.getId()) {
                 isLeader.compareAndSet(false, true);
+                var list = ImmutableList.<RaftPeer>builder();
+                try {
+                    for (var group : server.getGroups()) {
+                        list.addAll(group.getPeers());
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                metaManager = new MetaManager(id, list.build());
                 metaManager.startGossipCluster();
             }
             //TODO: case where leader down, but comes back up and was a seed node
@@ -87,7 +100,8 @@ public class PartitionStateMachine extends BaseStateMachine {
             FileUtils.createDirectories(path);
         }
         SnapshotHelper.loadSnapShot(this, storage, false).get();
-        this.metaManager = new MetaManager(groupId, getId());
+        this.server = server;
+        this.id = groupId;
     }
 
     @SneakyThrows
