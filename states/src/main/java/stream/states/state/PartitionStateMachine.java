@@ -39,7 +39,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static stream.models.proto.requests.PublishRequestOuterClass.PublishRequest;
@@ -91,8 +90,7 @@ public class PartitionStateMachine extends BaseStateMachine {
 
     @SneakyThrows
     @Override
-    public void initialize(RaftServer server, RaftGroupId groupId, RaftStorage raftStorage)
-            throws IOException {
+    public void initialize(RaftServer server, RaftGroupId groupId, RaftStorage raftStorage) {
         super.initialize(server, groupId, raftStorage);
         this.storage.init(raftStorage);
         Files.createDirectories(files.resolve(Path.of("MetaData")));
@@ -106,7 +104,7 @@ public class PartitionStateMachine extends BaseStateMachine {
 
     @SneakyThrows
     @Override
-    public void reinitialize() throws IOException {
+    public void reinitialize() {
         close();
         SnapshotHelper.loadSnapShot(this, storage, false).get();
     }

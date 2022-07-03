@@ -47,7 +47,7 @@ public class Consumer extends Client {
         long startTime = System.currentTimeMillis();
         ConsumerClient firstClient = (ConsumerClient) clients.get(0);
         var result = firstClient.readPartition(offset, partition, topic);
-        for(var record : result.getDataList()){
+        for (var record : result.getDataList()) {
             log.info("Results: {}", record);
         }
         long endTime = System.currentTimeMillis();
@@ -56,7 +56,7 @@ public class Consumer extends Client {
     }
 
     @Override
-    protected List<BaseClient> getClients(RaftProperties raftProperties,int numClients){
+    protected List<BaseClient> getClients(RaftProperties raftProperties, int numClients) {
         List<BaseClient> consumerClients = new ArrayList<>();
         for (int i = 0; i < numClients; i++) {
             final RaftGroup raftGroup = RaftGroup.valueOf(RaftGroupId.valueOf(ByteString.copyFromUtf8(getRaftGroupId())),

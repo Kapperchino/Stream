@@ -50,9 +50,9 @@ repositories {
 dependencies {
     implementation "kapperchino:stream-deps:0.37:dep"
     implementation "io.netty:netty-resolver-dns-native-macos:4.1.70.Final:osx-aarch_64"
-    implementation project(path: ':utilities',configuration: 'shadow')
-    implementation project(path: ':client',configuration: 'shadow')
-    implementation project(path: ':states',configuration: 'shadow')
+    implementation project(path: ':utilities', configuration: 'shadow')
+    implementation project(path: ':client', configuration: 'shadow')
+    implementation project(path: ':states', configuration: 'shadow')
     implementation project(path: ':models', configuration: 'shadow')
 
 }

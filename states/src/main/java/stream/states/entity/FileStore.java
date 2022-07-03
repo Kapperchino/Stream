@@ -284,7 +284,7 @@ public class FileStore implements Closeable {
             this.map = new ConcurrentHashMap<>();
         }
 
-        FileMap(Supplier<String> name, Map<Path,FileInfo> map) {
+        FileMap(Supplier<String> name, Map<Path, FileInfo> map) {
             this.name = StringUtils.stringSupplierAsObject(name);
             this.map = map;
         }

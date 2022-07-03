@@ -79,7 +79,7 @@ public abstract class Client extends SubCommandBase {
             FileUtils.createDirectories(dir);
         }
 
-        streamOperation(getClients(raftProperties,numClients));
+        streamOperation(getClients(raftProperties, numClients));
     }
 
     protected List<BaseClient> getClients(RaftProperties raftProperties, int numClients) {

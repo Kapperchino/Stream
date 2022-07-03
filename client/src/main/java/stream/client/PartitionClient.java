@@ -14,7 +14,7 @@ import stream.models.proto.responses.AddPartitionResponseOuterClass;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
-public class PartitionClient extends BaseClient{
+public class PartitionClient extends BaseClient {
 
     public PartitionClient(RaftGroup group, RaftProperties properties)
             throws IOException {

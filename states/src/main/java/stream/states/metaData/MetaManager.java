@@ -5,7 +5,6 @@ import io.scalecube.cluster.membership.MembershipEvent;
 import io.scalecube.cluster.transport.api.Message;
 import io.scalecube.net.Address;
 import io.scalecube.transport.netty.tcp.TcpTransportFactory;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.protocol.RaftGroupId;
 import org.apache.ratis.protocol.RaftPeer;
@@ -27,11 +26,11 @@ public class MetaManager {
     private final int SEED_PORT = 6969;
     //meta-data for the current raft group
     ClusterMeta clusterMeta;
-    RaftGroupInfo nodeMeta;
+    ShardGroupInfo shardMeta;
     Map<String, Topic> topicMap;
     private Cluster gossipCluster;
     private final RaftGroupId groupId;
-    private List<RaftPeer> peers;
+    private final List<RaftPeer> peers;
     ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
     public MetaManager(RaftGroupId raftGroupId, List<RaftPeer> peers) {
@@ -56,7 +55,7 @@ public class MetaManager {
     public void startGossipCluster() {
         if (gossipCluster == null) {
             gossipCluster = createGossipCluster();
-            nodeMeta = RaftGroupInfo.of(groupId, peers, gossipCluster.member());
+            shardMeta = ShardGroupInfo.of(groupId, peers, gossipCluster.member());
         }
     }
 
@@ -65,7 +64,7 @@ public class MetaManager {
             case ADDED:
                 var otherMeta = event.newMetadata();
                 var proto = NodeMeta.parseFrom(otherMeta);
-                log.info("new memeber added: {}", proto);
+                log.info("new member added: {}", proto);
                 var peersList = proto.getPeersList().stream()
                         .map((val) -> {
                             var builder = RaftPeer.newBuilder();

@@ -71,7 +71,7 @@ clean {
 }
 
 shadowJar {
-    relocate 'com.google','org.apache.ratis.thirdparty.com.google'
+    relocate 'com.google', 'org.apache.ratis.thirdparty.com.google'
     mergeServiceFiles()
     archiveBaseName.set('models')
     project.configurations.implementation.canBeResolved = true

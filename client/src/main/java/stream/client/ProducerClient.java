@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
  */
 //todo: make config another package
 @Slf4j
-public class ProducerClient extends BaseClient{
+public class ProducerClient extends BaseClient {
     public ProducerClient(RaftGroup group, RaftProperties properties)
             throws IOException {
         super(group, properties);

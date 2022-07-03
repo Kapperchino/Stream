@@ -8,17 +8,16 @@ import org.apache.ratis.protocol.RaftGroupId;
 import org.apache.ratis.protocol.RaftPeer;
 
 import java.util.List;
-import java.util.Map;
 
 @Builder
 @Data
-public class RaftGroupInfo {
+public class ShardGroupInfo {
     RaftGroup group;
     Member member;
 
-    public static RaftGroupInfo of(RaftGroupId id, List<RaftPeer> peers, Member member) {
+    public static ShardGroupInfo of(RaftGroupId id, List<RaftPeer> peers, Member member) {
         var raftGroup = RaftGroup.valueOf(id, peers);
-        return RaftGroupInfo.builder()
+        return ShardGroupInfo.builder()
                 .group(raftGroup)
                 .member(member)
                 .build();
