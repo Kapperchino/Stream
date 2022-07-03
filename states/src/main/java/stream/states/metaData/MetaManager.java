@@ -5,6 +5,8 @@ import io.scalecube.cluster.membership.MembershipEvent;
 import io.scalecube.cluster.transport.api.Message;
 import io.scalecube.net.Address;
 import io.scalecube.transport.netty.tcp.TcpTransportFactory;
+import lombok.Builder;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.protocol.RaftGroupId;
 import org.apache.ratis.protocol.RaftPeer;
@@ -27,7 +29,7 @@ public class MetaManager {
     //meta-data for the current raft group
     ClusterMeta clusterMeta;
     ShardGroupInfo shardMeta;
-    Map<String, Topic> topicMap;
+    Map<String, TopicMeta> topicMap;
     private Cluster gossipCluster;
     private final RaftGroupId groupId;
     private final List<RaftPeer> peers;
@@ -37,7 +39,7 @@ public class MetaManager {
         topicMap = new ConcurrentHashMap<>();
         this.groupId = raftGroupId;
         clusterMeta = ClusterMeta.builder()
-                .raftGroups(new ConcurrentHashMap<>())
+                .raftGroups(new ConcurrentSkipListMap<>())
                 .build();
         this.peers = peers;
     }
@@ -158,6 +160,13 @@ public class MetaManager {
                 log.info("gossip message: {}", element);
             }
         };
+    }
+
+    @Builder
+    @Value
+    private static class TopicMeta {
+        HashRing ring;
+        Topic topic;
     }
 
 }

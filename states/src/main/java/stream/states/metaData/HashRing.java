@@ -4,14 +4,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.MurmurHash3;
 
 import java.nio.charset.StandardCharsets;
-import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 @Slf4j
 public class HashRing {
     ConcurrentSkipListMap<Integer, Integer> set;
     String topic;
-    final int size = 256;
+    final int size = Integer.MAX_VALUE;
 
     public HashRing(String topic) {
         this.topic = topic;
