@@ -1,5 +1,6 @@
 package stream.states.metaData;
 
+import com.google.common.collect.ImmutableList;
 import io.scalecube.cluster.*;
 import io.scalecube.cluster.membership.MembershipEvent;
 import io.scalecube.cluster.transport.api.Message;
@@ -12,8 +13,10 @@ import org.apache.ratis.protocol.RaftGroupId;
 import org.apache.ratis.protocol.RaftPeer;
 import org.apache.ratis.thirdparty.com.google.protobuf.InvalidProtocolBufferException;
 import stream.models.lombok.Topic;
-import stream.models.proto.meta.NodeMetaOuterClass;
-import stream.models.proto.meta.NodeMetaOuterClass.NodeMeta;
+import stream.models.proto.meta.ClusterMetaOuterClass;
+import stream.models.proto.meta.ShardGroupMetaOuterClass;
+import stream.models.proto.meta.ShardGroupMetaOuterClass.ShardGroupMeta;
+import stream.models.proto.meta.TopicOuterClass;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -61,11 +64,44 @@ public class MetaManager {
         }
     }
 
+    public CompletableFuture<ClusterMetaOuterClass.ClusterMeta> getClusterMeta() {
+        var builder = ClusterMetaOuterClass.ClusterMeta.newBuilder();
+        builder.setTimestamp(clusterMeta.getTimeStamp().get());
+        clusterMeta.getRaftGroups()
+                .forEach((key, val) -> builder.putNodes(key, ShardGroupMeta.newBuilder()
+                        .setGroupId(val.getGroup().getGroupId().getUuid().toString())
+                        .addAllPeers(val.group.getPeers().stream()
+                                .map((val1) -> ShardGroupMetaOuterClass.RaftPeer.newBuilder()
+                                        .setRaftPeerId(val1.getId().toString())
+                                        .setAddress(val1.getAddress())
+                                        .build())
+                                .collect(Collectors.toList()))
+                        .build()));
+        return CompletableFuture.supplyAsync(builder::build);
+    }
+
+    public CompletableFuture<List<TopicOuterClass.Topic>> getTopics() {
+        return CompletableFuture.supplyAsync(() -> {
+            var list = ImmutableList.<TopicOuterClass.Topic>builder();
+            topicMap.forEach((key, val) -> {
+                var builder = TopicOuterClass.Topic.newBuilder();
+                builder.setTopicName(key);
+                val.topic.getPartitionMap()
+                        .forEach((key1, val1) -> builder.putPartitions(key1, TopicOuterClass.Partition.newBuilder()
+                                .setTopic(val.getTopic().getName())
+                                .setId(val1.getPartitionId())
+                                .build()));
+                list.add(builder.build());
+            });
+            return list.build();
+        });
+    }
+
     private void onMembershipChange(MembershipEvent event) throws InvalidProtocolBufferException {
         switch (event.type()) {
             case ADDED:
                 var otherMeta = event.newMetadata();
-                var proto = NodeMeta.parseFrom(otherMeta);
+                var proto = ShardGroupMeta.parseFrom(otherMeta);
                 log.info("new member added: {}", proto);
                 var peersList = proto.getPeersList().stream()
                         .map((val) -> {
@@ -74,11 +110,11 @@ public class MetaManager {
                             builder.setAddress(val.getAddress());
                             return builder.build();
                         }).collect(Collectors.toList());
-                clusterMeta.addRaftGroup(peersList, proto.getGroupId(), event.member());
+                clusterMeta.addRaftGroup(peersList, proto.getGroupId(), event.member(), event.timestamp());
                 break;
             case REMOVED:
                 var otherMeta1 = event.newMetadata();
-                var proto2 = NodeMeta.parseFrom(otherMeta1);
+                var proto2 = ShardGroupMeta.parseFrom(otherMeta1);
                 clusterMeta.removeRaftGroup(proto2.getGroupId());
                 break;
             case UPDATED:
@@ -90,12 +126,12 @@ public class MetaManager {
         var isSeed = System.getenv("IS_SEED");
         var seedDNS = System.getenv("SEED_DNS");
         var peersProto = peers.stream().map((val) ->
-                        NodeMetaOuterClass.RaftPeer.newBuilder()
+                        ShardGroupMetaOuterClass.RaftPeer.newBuilder()
                                 .setAddress(val.getAddress())
                                 .setRaftPeerId(String.valueOf(val.getId()))
                                 .build())
                 .collect(Collectors.toList());
-        var proto = NodeMeta.newBuilder()
+        var proto = ShardGroupMeta.newBuilder()
                 .addAllPeers(peersProto)
                 .setGroupId(groupId.getUuid().toString()).build();
         if (isSeed != null) {

@@ -1,10 +1,12 @@
 syntax = "proto3";
 option java_package = "stream.models.proto.meta";
 option java_generate_equals_and_hash = true;
+import "Topic.proto";
 
-message NodeMeta {
+message ShardGroupMeta {
   string groupId = 1;
   repeated RaftPeer peers = 2;
+  repeated Partition partitions = 3;
 }
 
 message RaftPeer {

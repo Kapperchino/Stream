@@ -1,7 +1,6 @@
 syntax = "proto3";
 option java_package = "stream.models.proto.meta";
 option java_generate_equals_and_hash = true;
-import "NodeMeta.proto";
 
 message Topic {
   string topicName = 1;
@@ -11,5 +10,4 @@ message Topic {
 message Partition {
   int64 id = 1;
   string topic = 2;
-  NodeMeta node = 3;
 }

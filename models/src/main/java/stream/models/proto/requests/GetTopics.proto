@@ -2,6 +2,6 @@ syntax = "proto3";
 option java_package = "stream.models.proto.requests";
 option java_generate_equals_and_hash = true;
 
-message GetMetaDataRequest {
+message GetTopics {
 }
 

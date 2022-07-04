@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+option java_package = "stream.models.proto.responses";
+option java_generate_equals_and_hash = true;
+import "ClusterMeta.proto";
+
+message GetClusterResponse {
+  ClusterMeta meta = 1;
+}

@@ -1,10 +1,10 @@
 syntax = "proto3";
 option java_package = "stream.models.proto.meta";
 option java_generate_equals_and_hash = true;
-import "NodeMeta.proto";
+import "ShardGroupMeta.proto";
 
 message ClusterMeta {
   int64 timestamp = 1;
-  map<string,NodeMeta> nodes = 2;
+  map<string,ShardGroupMeta> nodes = 2;
 }
 
