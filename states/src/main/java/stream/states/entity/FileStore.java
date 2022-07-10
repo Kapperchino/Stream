@@ -20,7 +20,7 @@ import org.apache.ratis.util.*;
 import org.apache.ratis.util.function.CheckedSupplier;
 import stream.models.lombok.dto.WriteFileMeta;
 import stream.models.lombok.dto.WriteResultFutures;
-import stream.states.FileStoreCommon;
+import stream.states.StreamCommon;
 import stream.states.serializers.FileStoreDeserializer;
 import stream.states.serializers.FileStoreSerializer;
 
@@ -64,22 +64,22 @@ public class FileStore implements Closeable {
         this.properties = properties;
         this.idSupplier = idSupplier;
         this.rootSuppliers = new ArrayList<>();
-        int writeThreadNum = ConfUtils.getInt(properties::getInt, FileStoreCommon.STATEMACHINE_WRITE_THREAD_NUM,
+        int writeThreadNum = ConfUtils.getInt(properties::getInt, StreamCommon.STATEMACHINE_WRITE_THREAD_NUM,
                 1, log::info);
-        int readThreadNum = ConfUtils.getInt(properties::getInt, FileStoreCommon.STATEMACHINE_READ_THREAD_NUM,
+        int readThreadNum = ConfUtils.getInt(properties::getInt, StreamCommon.STATEMACHINE_READ_THREAD_NUM,
                 1, log::info);
-        int commitThreadNum = ConfUtils.getInt(properties::getInt, FileStoreCommon.STATEMACHINE_COMMIT_THREAD_NUM,
+        int commitThreadNum = ConfUtils.getInt(properties::getInt, StreamCommon.STATEMACHINE_COMMIT_THREAD_NUM,
                 1, log::info);
-        int deleteThreadNum = ConfUtils.getInt(properties::getInt, FileStoreCommon.STATEMACHINE_DELETE_THREAD_NUM,
+        int deleteThreadNum = ConfUtils.getInt(properties::getInt, StreamCommon.STATEMACHINE_DELETE_THREAD_NUM,
                 1, log::info);
         writer = Executors.newFixedThreadPool(writeThreadNum);
         reader = Executors.newFixedThreadPool(readThreadNum);
         committer = Executors.newFixedThreadPool(commitThreadNum);
         deleter = Executors.newFixedThreadPool(deleteThreadNum);
 
-        final List<File> dirs = ConfUtils.getFiles(properties::getFiles, FileStoreCommon.STATEMACHINE_DIR_KEY,
+        final List<File> dirs = ConfUtils.getFiles(properties::getFiles, StreamCommon.STATEMACHINE_DIR_KEY,
                 null, log::info);
-        Objects.requireNonNull(dirs, FileStoreCommon.STATEMACHINE_DIR_KEY + " is not set.");
+        Objects.requireNonNull(dirs, StreamCommon.STATEMACHINE_DIR_KEY + " is not set.");
         for (File dir : dirs) {
             this.rootSuppliers.add(
                     JavaUtils.memoize(() -> dir.toPath().resolve(getId().toString()).normalize().toAbsolutePath()));
@@ -144,7 +144,7 @@ public class FileStore implements Closeable {
         final CheckedSupplier<ReadReplyProto, IOException> task = LogUtils.newCheckedSupplier(log, () -> {
             final FileInfo info = files.get(relative);
             final ReadReplyProto.Builder reply = ReadReplyProto.newBuilder()
-                    .setResolvedPath(FileStoreCommon.toByteString(info.getRelativePath()))
+                    .setResolvedPath(StreamCommon.toByteString(info.getRelativePath()))
                     .setOffset(offset);
 
             final ByteString bytes = info.read(this::resolve, offset, length, readCommitted);
@@ -170,7 +170,7 @@ public class FileStore implements Closeable {
         try {
             uc = files.get(relative).asUnderConstruction();
         } catch (FileNotFoundException e) {
-            return FileStoreCommon.completeExceptionally(
+            return StreamCommon.completeExceptionally(
                     index, "Failed to write to " + relative, e);
         }
         return uc.submitCommit(offset, size, converter, committer, getId(), index);

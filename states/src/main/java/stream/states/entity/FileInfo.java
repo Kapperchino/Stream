@@ -14,7 +14,7 @@ import org.apache.ratis.util.Preconditions;
 import org.apache.ratis.util.TaskQueue;
 import org.apache.ratis.util.function.CheckedFunction;
 import org.apache.ratis.util.function.CheckedSupplier;
-import stream.states.FileStoreCommon;
+import stream.states.StreamCommon;
 import stream.states.serializers.UnderConstructionDeserializer;
 import stream.states.serializers.UnderConstructionSerializer;
 
@@ -76,7 +76,7 @@ public abstract class FileInfo {
         }
         try (SeekableByteChannel in = Files.newByteChannel(
                 resolver.apply(getRelativePath()), StandardOpenOption.READ)) {
-            final ByteBuffer buffer = ByteBuffer.allocateDirect(FileStoreCommon.getChunkSize(length));
+            final ByteBuffer buffer = ByteBuffer.allocateDirect(StreamCommon.getChunkSize(length));
             in.position(offset).read(buffer);
             buffer.flip();
             return ByteString.copyFrom(buffer);

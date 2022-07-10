@@ -18,12 +18,9 @@ import org.apache.ratis.statemachine.impl.SimpleStateMachineStorage;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.thirdparty.com.google.protobuf.InvalidProtocolBufferException;
 import org.apache.ratis.util.FileUtils;
-import stream.models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
-import stream.models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
-import stream.models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
 import stream.models.proto.requests.ReadRequestOuterClass.ReadRequest;
 import stream.models.proto.requests.WriteRequestOuterClass.WriteRequest;
-import stream.states.FileStoreCommon;
+import stream.states.StreamCommon;
 import stream.states.entity.FileStore;
 import stream.states.handlers.ReadHandler;
 import stream.states.handlers.TransactionHandler;
@@ -152,7 +149,7 @@ public class PartitionStateMachine extends BaseStateMachine {
         try {
             proto = ReadRequest.parseFrom(request.getContent());
         } catch (InvalidProtocolBufferException e) {
-            return FileStoreCommon.completeExceptionally(
+            return StreamCommon.completeExceptionally(
                     "Failed to parse data, entry=" + request, e);
         }
         if (proto.getRequestCase() != ReadRequest.RequestCase.CONSUME) {
@@ -213,7 +210,7 @@ public class PartitionStateMachine extends BaseStateMachine {
         try {
             proto = WriteRequest.parseFrom(data.toByteArray());
         } catch (Exception e) {
-            return FileStoreCommon.completeExceptionally(
+            return StreamCommon.completeExceptionally(
                     entry.getIndex(), "Failed to parse data, entry=" + entry, e);
         }
         var resBuilder = ImmutableList.<CompletableFuture<?>>builder();
@@ -242,7 +239,7 @@ public class PartitionStateMachine extends BaseStateMachine {
         try {
             proto = ReadRequest.parseFrom(data);
         } catch (InvalidProtocolBufferException e) {
-            return FileStoreCommon.completeExceptionally(
+            return StreamCommon.completeExceptionally(
                     entry.getIndex(), "Failed to parse data, entry=" + entry, e);
         }
         var resBuilder = ImmutableList.<CompletableFuture<ByteString>>builder();
@@ -273,7 +270,7 @@ public class PartitionStateMachine extends BaseStateMachine {
         try {
             proto = FileStoreRequestProto.parseFrom(reqByteString);
         } catch (InvalidProtocolBufferException e) {
-            return FileStoreCommon.completeExceptionally(
+            return StreamCommon.completeExceptionally(
                     "Failed to parse stream header", e);
         }
         return files.createDataChannel(proto.getStream().getPath().toStringUtf8())
@@ -299,46 +296,29 @@ public class PartitionStateMachine extends BaseStateMachine {
         try {
             request = WriteRequest.parseFrom(smLog.getLogData());
         } catch (InvalidProtocolBufferException e) {
-            return FileStoreCommon.completeExceptionally(index,
+            return StreamCommon.completeExceptionally(index,
                     "Failed to parse logData in" + smLog, e);
         }
 
-        switch (request.getRequestCase()) {
-            case PUBLISH:
-                //TODO: add recovery features, currently when the state machines are down we lose all meta-data
-                return writeCommit(index, request.getPublish().getHeader(), request.getPublish().getData());
-            case ADDPARTITION:
-                return addPartition(index, request.getAddPartition());
-            case CREATETOPIC:
-                break;
-            default:
-                LOG.error(getId() + ": Unexpected request case " + request.getRequestCase());
-                return FileStoreCommon.completeExceptionally(index,
-                        "Unexpected request case " + request.getRequestCase());
+        var resBuilder = ImmutableList.<CompletableFuture<Message>>builder();
+        transactionHandlers.forEach(val -> {
+            var res = val.applyTransaction(request, index);
+            if (res != null) {
+                resBuilder.add(res);
+            }
+        });
+
+        var resList = resBuilder.build();
+        if (resList.size() > 1) {
+            log.error("More than one transaction was valid but only one should be valid");
+            throw new RuntimeException("More than one transaction was valid but only one should be valid");
         }
-        return FileStoreCommon.completeExceptionally(index,
+        if (resList.isEmpty()) {
+            return null;
+        }
+
+        return StreamCommon.completeExceptionally(index,
                 "Unexpected request case " + request.getRequestCase());
-    }
-
-
-    private CompletableFuture<Message> writeCommit(
-            long index, PublishRequestHeader header, PublishRequestData data) {
-        var f1 = partitionManager
-                .submitCommit(index, header, data);
-        if (f1 != null) {
-            return f1.thenApply(reply -> Message.valueOf(reply.toByteString()));
-        }
-        return FileStoreCommon.completeExceptionally(
-                index, "Failed to commit, index: " + index);
-    }
-
-    private CompletableFuture<Message> addPartition(
-            long index, AddPartitionRequest request) {
-        var f1 = partitionManager.addPartition(index, request);
-        if (f1 != null) {
-            return f1.thenApply(reply -> Message.valueOf(reply.toByteString()));
-        }
-        return null;
     }
 
     public void setLastAppliedTermIndex(TermIndex newTI) {
@@ -364,7 +344,7 @@ public class PartitionStateMachine extends BaseStateMachine {
                     dataChannel.close();
                     return true;
                 } catch (IOException e) {
-                    return FileStoreCommon.completeExceptionally("Failed to close data channel", e);
+                    return StreamCommon.completeExceptionally("Failed to close data channel", e);
                 }
             });
         }

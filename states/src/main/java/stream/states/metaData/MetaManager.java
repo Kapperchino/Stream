@@ -17,6 +17,7 @@ import stream.models.proto.meta.ClusterMetaOuterClass;
 import stream.models.proto.meta.ShardGroupMetaOuterClass;
 import stream.models.proto.meta.ShardGroupMetaOuterClass.ShardGroupMeta;
 import stream.models.proto.meta.TopicOuterClass;
+import stream.states.partitions.PartitionManager;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -37,14 +38,16 @@ public class MetaManager {
     private final RaftGroupId groupId;
     private final List<RaftPeer> peers;
     ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+    PartitionManager partitionManager;
 
-    public MetaManager(RaftGroupId raftGroupId, List<RaftPeer> peers) {
+    public MetaManager(RaftGroupId raftGroupId, List<RaftPeer> peers, PartitionManager manager) {
         topicMap = new ConcurrentHashMap<>();
         this.groupId = raftGroupId;
         clusterMeta = ClusterMeta.builder()
                 .raftGroups(new ConcurrentSkipListMap<>())
                 .build();
         this.peers = peers;
+        this.partitionManager = manager;
     }
 
     //need to add the topic meta-data, also will need to talk to other groups to spread the partitions

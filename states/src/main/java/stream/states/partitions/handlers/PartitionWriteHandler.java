@@ -2,11 +2,10 @@ package stream.states.partitions.handlers;
 
 import lombok.Builder;
 import org.apache.ratis.proto.RaftProtos;
-import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.thirdparty.com.google.protobuf.InvalidProtocolBufferException;
 import stream.models.proto.requests.PublishRequestDataOuterClass;
 import stream.models.proto.requests.WriteRequestOuterClass;
-import stream.states.FileStoreCommon;
+import stream.states.StreamCommon;
 import stream.states.handlers.WriteHandler;
 import stream.states.partitions.PartitionManager;
 
@@ -26,7 +25,7 @@ public class PartitionWriteHandler implements WriteHandler {
             try {
                 publishData = PublishRequestDataOuterClass.PublishRequestData.parseFrom(machineData);
             } catch (InvalidProtocolBufferException e) {
-                return FileStoreCommon.completeExceptionally(
+                return StreamCommon.completeExceptionally(
                         entry.getIndex(), "Failed to parse data, entry=" + entry, e);
             }
             return manager.writeToPartition(entry.getIndex(), publishReq.getHeader().getTopic(), 0, publishData);

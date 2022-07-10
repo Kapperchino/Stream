@@ -6,11 +6,10 @@ import org.apache.ratis.util.ProtoUtils;
 import org.apache.ratis.util.SizeInBytes;
 import org.apache.ratis.util.TraditionalBinaryPrefix;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 
-public interface FileStoreCommon {
+public interface StreamCommon {
     String STATEMACHINE_PREFIX = "example.filestore.statemachine";
 
     String STATEMACHINE_DIR_KEY = STATEMACHINE_PREFIX + ".dir";
@@ -46,6 +45,6 @@ public interface FileStoreCommon {
     static <T> CompletableFuture<T> completeExceptionally(
             String message, Throwable cause) {
         return JavaUtils.completeExceptionally(
-                new IOException(message).initCause(cause));
+                new RuntimeException(message, cause));
     }
 }

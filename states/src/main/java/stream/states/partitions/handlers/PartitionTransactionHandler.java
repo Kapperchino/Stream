@@ -9,7 +9,7 @@ import org.apache.ratis.statemachine.TransactionContext;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.thirdparty.com.google.protobuf.InvalidProtocolBufferException;
 import stream.models.proto.requests.*;
-import stream.states.FileStoreCommon;
+import stream.states.StreamCommon;
 import stream.states.handlers.TransactionHandler;
 import stream.states.partitions.PartitionManager;
 
@@ -33,20 +33,7 @@ public class PartitionTransactionHandler implements TransactionHandler {
     }
 
     @Override
-    public CompletableFuture<Message> applyTransaction(TransactionContext trx) {
-        final RaftProtos.LogEntryProto entry = trx.getLogEntry();
-
-        final long index = entry.getIndex();
-
-        final RaftProtos.StateMachineLogEntryProto smLog = entry.getStateMachineLogEntry();
-        final WriteRequestOuterClass.WriteRequest request;
-        try {
-            request = WriteRequestOuterClass.WriteRequest.parseFrom(smLog.getLogData());
-        } catch (InvalidProtocolBufferException e) {
-            return FileStoreCommon.completeExceptionally(index,
-                    "Failed to parse logData in" + smLog, e);
-        }
-
+    public CompletableFuture<Message> applyTransaction(WriteRequestOuterClass.WriteRequest request, long index) {
         switch (request.getRequestCase()) {
             case PUBLISH:
                 //TODO: add recovery features, currently when the state machines are down we lose all meta-data
@@ -68,7 +55,7 @@ public class PartitionTransactionHandler implements TransactionHandler {
         if (f1 != null) {
             return f1.thenApply(reply -> Message.valueOf(reply.toByteString()));
         }
-        return FileStoreCommon.completeExceptionally(
+        return StreamCommon.completeExceptionally(
                 index, "Failed to commit, index: " + index);
     }
 
