@@ -4,10 +4,7 @@ import com.google.common.collect.ImmutableList;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ratis.conf.RaftProperties;
-import org.apache.ratis.proto.ExamplesProtos.DeleteReplyProto;
-import org.apache.ratis.proto.ExamplesProtos.DeleteRequestProto;
 import org.apache.ratis.proto.ExamplesProtos.FileStoreRequestProto;
-import org.apache.ratis.proto.ExamplesProtos.StreamWriteRequestProto;
 import org.apache.ratis.proto.RaftProtos.LogEntryProto;
 import org.apache.ratis.proto.RaftProtos.StateMachineLogEntryProto;
 import org.apache.ratis.protocol.*;
@@ -18,30 +15,32 @@ import org.apache.ratis.statemachine.StateMachineStorage;
 import org.apache.ratis.statemachine.TransactionContext;
 import org.apache.ratis.statemachine.impl.BaseStateMachine;
 import org.apache.ratis.statemachine.impl.SimpleStateMachineStorage;
-import org.apache.ratis.thirdparty.com.google.protobuf.AbstractMessageLite;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import org.apache.ratis.thirdparty.com.google.protobuf.InvalidProtocolBufferException;
 import org.apache.ratis.util.FileUtils;
 import stream.models.proto.requests.AddPartitionRequestOuterClass.AddPartitionRequest;
-import stream.models.proto.requests.ConsumeRequestOuterClass.ConsumeRequest;
 import stream.models.proto.requests.PublishRequestDataOuterClass.PublishRequestData;
 import stream.models.proto.requests.PublishRequestHeaderOuterClass.PublishRequestHeader;
 import stream.models.proto.requests.ReadRequestOuterClass.ReadRequest;
 import stream.models.proto.requests.WriteRequestOuterClass.WriteRequest;
-import stream.models.proto.responses.ConsumeResponseOuterClass.ConsumeResponse;
 import stream.states.FileStoreCommon;
 import stream.states.entity.FileStore;
+import stream.states.handlers.ReadHandler;
+import stream.states.handlers.TransactionHandler;
+import stream.states.handlers.WriteHandler;
 import stream.states.metaData.MetaManager;
 import stream.states.partitions.PartitionManager;
+import stream.states.partitions.handlers.PartitionReadHandler;
+import stream.states.partitions.handlers.PartitionTransactionHandler;
+import stream.states.partitions.handlers.PartitionWriteHandler;
 import stream.states.snapshot.SnapshotHelper;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static stream.models.proto.requests.PublishRequestOuterClass.PublishRequest;
 
 @Slf4j
 public class PartitionStateMachine extends BaseStateMachine {
@@ -53,11 +52,29 @@ public class PartitionStateMachine extends BaseStateMachine {
     private MetaManager metaManager;
     private RaftServer server;
     private RaftGroupId id;
+    private final List<ReadHandler> readHandlers;
+    private final List<WriteHandler> writeHandlers;
+    private final List<TransactionHandler> transactionHandlers;
 
     public PartitionStateMachine(RaftProperties properties) {
         this.partitionManager = new PartitionManager(this::getId, properties);
         files = partitionManager.store;
         isLeader = new AtomicBoolean(false);
+        readHandlers = ImmutableList.of(
+                PartitionReadHandler
+                        .builder()
+                        .partitionManager(partitionManager)
+                        .build());
+        writeHandlers = ImmutableList.of(
+                PartitionWriteHandler
+                        .builder()
+                        .manager(partitionManager)
+                        .build());
+        transactionHandlers = ImmutableList.of(
+                PartitionTransactionHandler
+                        .builder()
+                        .partitionManager(partitionManager)
+                        .build());
     }
 
     @Override
@@ -141,13 +158,24 @@ public class PartitionStateMachine extends BaseStateMachine {
         if (proto.getRequestCase() != ReadRequest.RequestCase.CONSUME) {
             return null;
         }
+        var resBuilder = ImmutableList.<CompletableFuture<ByteString>>builder();
+        readHandlers.forEach(val -> {
+            var res = val.handleRead(proto);
+            if (res != null) {
+                resBuilder.add(res);
+            }
+        });
 
-        final ConsumeRequest consume = proto.getConsume();
-        CompletableFuture<ConsumeResponse> reply =
-                partitionManager.readFromPartition(consume.getTopic(),
-                        (int) consume.getPartition(), (int) consume.getOffset());
+        var resList = resBuilder.build();
+        if (resList.size() > 1) {
+            log.error("More than one transaction was valid but only one should be valid");
+            throw new RuntimeException("More than one transaction was valid but only one should be valid");
+        }
+        if (resList.isEmpty()) {
+            return null;
+        }
 
-        return reply.thenApply((a) -> Message.valueOf(a.toByteString()));
+        return resList.get(0).thenApply(Message::valueOf);
     }
 
     @Override
@@ -158,15 +186,23 @@ public class PartitionStateMachine extends BaseStateMachine {
         final TransactionContext.Builder b = TransactionContext.newBuilder()
                 .setStateMachine(this)
                 .setClientRequest(request);
-        if (proto.getRequestCase() == WriteRequest.RequestCase.PUBLISH) {
-            var publishProto = proto.getPublish();
-            final WriteRequest newProto = WriteRequest.newBuilder()
-                    .setPublish(PublishRequest.newBuilder().setHeader(publishProto.getHeader())).build();
-            b.setLogData(ByteString.copyFrom(newProto.toByteArray())).setStateMachineData(ByteString.copyFrom(publishProto.getData().toByteArray()));
-        } else {
-            b.setLogData(content);
+        var resBuilder = ImmutableList.<TransactionContext>builder();
+        transactionHandlers.forEach(val -> {
+            var res = val.startTransaction(request, proto, b);
+            if (res != null) {
+                resBuilder.add(res);
+            }
+        });
+        var resList = resBuilder.build();
+        if (resList.size() > 1) {
+            log.error("More than one transaction was valid but only one should be valid");
+            throw new RuntimeException("More than one transaction was valid but only one should be valid");
         }
-        return b.build();
+        if (resList.isEmpty()) {
+            b.setLogData(content);
+            return b.build();
+        }
+        return resList.get(0);
     }
 
     @Override
@@ -180,20 +216,22 @@ public class PartitionStateMachine extends BaseStateMachine {
             return FileStoreCommon.completeExceptionally(
                     entry.getIndex(), "Failed to parse data, entry=" + entry, e);
         }
-        if (proto.getRequestCase() == WriteRequest.RequestCase.PUBLISH) {
-            var publishReq = proto.getPublish();
-            var machineData = smLog.getStateMachineEntry().getStateMachineData();
-            PublishRequestData publishData = null;
-            try {
-                publishData = PublishRequestData.parseFrom(machineData);
-            } catch (InvalidProtocolBufferException e) {
-                return FileStoreCommon.completeExceptionally(
-                        entry.getIndex(), "Failed to parse data, entry=" + entry, e);
+        var resBuilder = ImmutableList.<CompletableFuture<?>>builder();
+        writeHandlers.forEach(val -> {
+            var res = val.handleWrite(proto, entry);
+            if (res != null) {
+                resBuilder.add(res);
             }
-            //TODO: partition management will be added after we get publishing, consuming working with one node and two replicas
-            return partitionManager.writeToPartition(entry.getIndex(), publishReq.getHeader().getTopic(), 0, publishData);
+        });
+        var resList = resBuilder.build();
+        if (resList.size() > 1) {
+            log.error("More than one transaction was valid but only one should be valid");
+            throw new RuntimeException("More than one transaction was valid but only one should be valid");
         }
-        return null;
+        if (resList.isEmpty()) {
+            return null;
+        }
+        return resList.get(0);
     }
 
     @Override
@@ -207,16 +245,24 @@ public class PartitionStateMachine extends BaseStateMachine {
             return FileStoreCommon.completeExceptionally(
                     entry.getIndex(), "Failed to parse data, entry=" + entry, e);
         }
-        if (proto.getRequestCase() != ReadRequest.RequestCase.CONSUME) {
+        var resBuilder = ImmutableList.<CompletableFuture<ByteString>>builder();
+        readHandlers.forEach(val -> {
+            var res = val.handleRead(proto);
+            if (res != null) {
+                resBuilder.add(res);
+            }
+        });
+
+        var resList = resBuilder.build();
+        if (resList.size() > 1) {
+            log.error("More than one transaction was valid but only one should be valid");
+            throw new RuntimeException("More than one transaction was valid but only one should be valid");
+        }
+        if (resList.isEmpty()) {
             return null;
         }
 
-        final ConsumeRequest request = proto.getConsume();
-        CompletableFuture<ConsumeResponse> reply =
-                partitionManager.readFromPartition(request.getTopic(),
-                        (int) request.getPartition(), (int) request.getOffset());
-
-        return reply.thenApply(AbstractMessageLite::toByteString);
+        return resList.get(0);
     }
 
     //TODO: add streaming
@@ -293,20 +339,6 @@ public class PartitionStateMachine extends BaseStateMachine {
             return f1.thenApply(reply -> Message.valueOf(reply.toByteString()));
         }
         return null;
-    }
-
-    private CompletableFuture<Message> streamCommit(StreamWriteRequestProto stream) {
-        final String path = stream.getPath().toStringUtf8();
-        final long size = stream.getLength();
-        return files.streamCommit(path, size).thenApply(reply -> Message.valueOf(reply.toByteString()));
-    }
-
-    private CompletableFuture<Message> delete(long index, DeleteRequestProto request) {
-        final String path = request.getPath().toStringUtf8();
-        return files.delete(index, path).thenApply(resolved ->
-                Message.valueOf(DeleteReplyProto.newBuilder().setResolvedPath(
-                                FileStoreCommon.toByteString(resolved)).build().toByteString(),
-                        () -> "Message:" + resolved));
     }
 
     public void setLastAppliedTermIndex(TermIndex newTI) {
