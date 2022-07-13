@@ -21,7 +21,7 @@ import org.apache.ratis.util.LifeCycle;
 import org.apache.ratis.util.NetUtils;
 import org.apache.ratis.util.SizeInBytes;
 import org.apache.ratis.util.TimeDuration;
-import stream.states.FileStoreCommon;
+import stream.states.StreamCommon;
 import stream.states.state.PartitionStateMachine;
 
 import java.io.File;
@@ -89,13 +89,13 @@ public class Server extends SubCommandBase {
         RaftServerConfigKeys.Snapshot.setAutoTriggerEnabled(properties, true);
         RaftServerConfigKeys.Write.setElementLimit(properties, 40960);
         RaftServerConfigKeys.Write.setByteLimit(properties, SizeInBytes.valueOf("1000MB"));
-        ConfUtils.setFiles(properties::setFiles, FileStoreCommon.STATEMACHINE_DIR_KEY, storageDir);
+        ConfUtils.setFiles(properties::setFiles, StreamCommon.STATEMACHINE_DIR_KEY, storageDir);
         RaftServerConfigKeys.DataStream.setAsyncRequestThreadPoolSize(properties, writeThreadNum);
         RaftServerConfigKeys.DataStream.setAsyncWriteThreadPoolSize(properties, writeThreadNum);
-        ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_WRITE_THREAD_NUM, writeThreadNum);
-        ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_READ_THREAD_NUM, readThreadNum);
-        ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_COMMIT_THREAD_NUM, commitThreadNum);
-        ConfUtils.setInt(properties::setInt, FileStoreCommon.STATEMACHINE_DELETE_THREAD_NUM, deleteThreadNum);
+        ConfUtils.setInt(properties::setInt, StreamCommon.STATEMACHINE_WRITE_THREAD_NUM, writeThreadNum);
+        ConfUtils.setInt(properties::setInt, StreamCommon.STATEMACHINE_READ_THREAD_NUM, readThreadNum);
+        ConfUtils.setInt(properties::setInt, StreamCommon.STATEMACHINE_COMMIT_THREAD_NUM, commitThreadNum);
+        ConfUtils.setInt(properties::setInt, StreamCommon.STATEMACHINE_DELETE_THREAD_NUM, deleteThreadNum);
         StateMachine stateMachine = new PartitionStateMachine(properties);
 
         final RaftGroup raftGroup = RaftGroup.valueOf(RaftGroupId.valueOf(ByteString.copyFromUtf8(getRaftGroupId())),

@@ -26,6 +26,9 @@ import stream.states.handlers.ReadHandler;
 import stream.states.handlers.TransactionHandler;
 import stream.states.handlers.WriteHandler;
 import stream.states.metaData.MetaManager;
+import stream.states.metaData.handlers.MetaDataReadHandler;
+import stream.states.metaData.handlers.MetaDataTransactionHandler;
+import stream.states.metaData.handlers.MetaDataWriteHandler;
 import stream.states.partitions.PartitionManager;
 import stream.states.partitions.handlers.PartitionReadHandler;
 import stream.states.partitions.handlers.PartitionTransactionHandler;
@@ -61,16 +64,28 @@ public class PartitionStateMachine extends BaseStateMachine {
                 PartitionReadHandler
                         .builder()
                         .partitionManager(partitionManager)
+                        .build(),
+                MetaDataReadHandler
+                        .builder()
+                        .manager(metaManager)
                         .build());
         writeHandlers = ImmutableList.of(
                 PartitionWriteHandler
                         .builder()
                         .manager(partitionManager)
+                        .build(),
+                MetaDataWriteHandler
+                        .builder()
+                        .manager(metaManager)
                         .build());
         transactionHandlers = ImmutableList.of(
                 PartitionTransactionHandler
                         .builder()
                         .partitionManager(partitionManager)
+                        .build(),
+                MetaDataTransactionHandler
+                        .builder()
+                        .manager(metaManager)
                         .build());
     }
 
@@ -88,7 +103,7 @@ public class PartitionStateMachine extends BaseStateMachine {
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-                metaManager = new MetaManager(id, list.build());
+                metaManager = new MetaManager(id, list.build(), partitionManager);
                 metaManager.startGossipCluster();
             }
             //TODO: case where leader down, but comes back up and was a seed node

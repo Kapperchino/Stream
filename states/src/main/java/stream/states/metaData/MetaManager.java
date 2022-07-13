@@ -17,6 +17,8 @@ import stream.models.proto.meta.ClusterMetaOuterClass;
 import stream.models.proto.meta.ShardGroupMetaOuterClass;
 import stream.models.proto.meta.ShardGroupMetaOuterClass.ShardGroupMeta;
 import stream.models.proto.meta.TopicOuterClass;
+import stream.models.proto.responses.CreateTopicResponseOuterClass;
+import stream.models.proto.responses.CreateTopicResponseOuterClass.CreateTopicResponse;
 import stream.states.partitions.PartitionManager;
 
 import java.io.ByteArrayOutputStream;
@@ -51,8 +53,8 @@ public class MetaManager {
     }
 
     //need to add the topic meta-data, also will need to talk to other groups to spread the partitions
-    public void addTopic(String topic, int partitions) {
-
+    public CreateTopicResponse addTopic(String topic, int partitions) {
+        return null;
     }
 
     public void shutDown() {

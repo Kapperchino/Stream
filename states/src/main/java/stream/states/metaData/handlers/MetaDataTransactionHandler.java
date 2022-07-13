@@ -34,11 +34,12 @@ public class MetaDataTransactionHandler implements TransactionHandler {
     public CompletableFuture<Message> applyTransaction(WriteRequestOuterClass.WriteRequest request, long index) {
         switch (request.getRequestCase()) {
             case CREATETOPIC:
-                break;
+                var req = request.getCreateTopic();
+                return CompletableFuture.supplyAsync(() ->
+                        Message.valueOf(manager.addTopic(req.getTopic(), (int) req.getPartitions()).toByteString()));
             default:
                 return null;
         }
-        return null;
     }
 
 }
