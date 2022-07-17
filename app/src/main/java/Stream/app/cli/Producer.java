@@ -65,7 +65,7 @@ public class Producer extends Client {
             builder.setTopic(topic);
             listBuilder.add(builder.build());
         }
-        resultListBuilder.add(producerClient.publish(listBuilder.build(), "Test"));
+        resultListBuilder.add(producerClient.publish(listBuilder.build(), topic));
         var resultList = resultListBuilder.build();
         log.info("Results: {}", resultList);
         long endTime = System.currentTimeMillis();

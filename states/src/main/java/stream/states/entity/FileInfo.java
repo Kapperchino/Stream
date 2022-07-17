@@ -163,12 +163,9 @@ public abstract class FileInfo {
         /**
          * A queue to make sure that the writes are in order.
          */
-        @Builder.Default
         private TaskQueue writeQueue = new TaskQueue("writeQueue");
         @JsonProperty
-        @Builder.Default
         private Map<Long, WriteInfo> writeInfoMap = new ConcurrentHashMap<>();
-        @Builder.Default
         private AtomicLong lastWriteIndex = new AtomicLong(-1L);
         @JsonIgnore
         private FileStore.FileStoreDataChannel out;

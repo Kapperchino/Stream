@@ -167,9 +167,6 @@ public class PartitionStateMachine extends BaseStateMachine {
             return StreamCommon.completeExceptionally(
                     "Failed to parse data, entry=" + request, e);
         }
-        if (proto.getRequestCase() != ReadRequest.RequestCase.CONSUME) {
-            return null;
-        }
         var resBuilder = ImmutableList.<CompletableFuture<ByteString>>builder();
         readHandlers.forEach(val -> {
             var res = val.handleRead(proto);
@@ -194,7 +191,7 @@ public class PartitionStateMachine extends BaseStateMachine {
     public TransactionContext startTransaction(RaftClientRequest request) throws IOException {
         log.info("incoming transaction: {}", request);
         final ByteString content = request.getMessage().getContent();
-        final var proto = WriteRequest.parseFrom(content.toByteArray());
+        final var proto = WriteRequest.parseFrom(content);
         final TransactionContext.Builder b = TransactionContext.newBuilder()
                 .setStateMachine(this)
                 .setClientRequest(request);
@@ -329,11 +326,11 @@ public class PartitionStateMachine extends BaseStateMachine {
             throw new RuntimeException("More than one transaction was valid but only one should be valid");
         }
         if (resList.isEmpty()) {
-            return null;
+            StreamCommon.completeExceptionally(index,
+                    "Unexpected request case " + request.getRequestCase());
         }
 
-        return StreamCommon.completeExceptionally(index,
-                "Unexpected request case " + request.getRequestCase());
+        return resList.get(0);
     }
 
     public void setLastAppliedTermIndex(TermIndex newTI) {

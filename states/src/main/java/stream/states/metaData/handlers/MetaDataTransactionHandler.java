@@ -18,15 +18,6 @@ public class MetaDataTransactionHandler implements TransactionHandler {
 
     @Override
     public TransactionContext startTransaction(RaftClientRequest request, WriteRequest proto, TransactionContext.Builder contextBuilder) {
-        if (proto.getRequestCase() == WriteRequest.RequestCase.CREATETOPIC) {
-            var createTopicProto = proto.getCreateTopic();
-            contextBuilder.setLogData(ByteString.copyFrom(createTopicProto.toByteArray()));
-            return contextBuilder.build();
-        } else if (proto.getRequestCase() == WriteRequest.RequestCase.ADDPARTITION) {
-            var addPartitionProto = proto.getAddPartition();
-            contextBuilder.setLogData(ByteString.copyFrom(addPartitionProto.toByteArray()));
-            return contextBuilder.build();
-        }
         return null;
     }
 
