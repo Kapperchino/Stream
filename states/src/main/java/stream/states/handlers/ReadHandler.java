@@ -1,6 +1,5 @@
 package stream.states.handlers;
 
-import org.apache.ratis.proto.RaftProtos;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import stream.models.proto.requests.ReadRequestOuterClass;
 

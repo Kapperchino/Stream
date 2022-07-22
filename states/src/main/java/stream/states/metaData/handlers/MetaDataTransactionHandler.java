@@ -4,7 +4,6 @@ import lombok.Builder;
 import org.apache.ratis.protocol.Message;
 import org.apache.ratis.protocol.RaftClientRequest;
 import org.apache.ratis.statemachine.TransactionContext;
-import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import stream.models.proto.requests.WriteRequestOuterClass;
 import stream.models.proto.requests.WriteRequestOuterClass.WriteRequest;
 import stream.states.handlers.TransactionHandler;

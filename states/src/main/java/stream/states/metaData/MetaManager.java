@@ -1,7 +1,10 @@
 package stream.states.metaData;
 
 import com.google.common.collect.ImmutableList;
-import io.scalecube.cluster.*;
+import io.scalecube.cluster.Cluster;
+import io.scalecube.cluster.ClusterConfig;
+import io.scalecube.cluster.ClusterImpl;
+import io.scalecube.cluster.ClusterMessageHandler;
 import io.scalecube.cluster.membership.MembershipEvent;
 import io.scalecube.cluster.transport.api.Message;
 import io.scalecube.net.Address;

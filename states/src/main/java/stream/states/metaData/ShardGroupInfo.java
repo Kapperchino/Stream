@@ -9,7 +9,6 @@ import org.apache.ratis.protocol.RaftPeer;
 import stream.models.lombok.TopicPartition;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 @Builder

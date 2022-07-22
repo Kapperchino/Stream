@@ -1,7 +1,6 @@
 package stream.states.partitions.handlers;
 
 import lombok.Builder;
-import org.apache.ratis.proto.RaftProtos;
 import org.apache.ratis.thirdparty.com.google.protobuf.AbstractMessageLite;
 import org.apache.ratis.thirdparty.com.google.protobuf.ByteString;
 import stream.models.proto.requests.ConsumeRequestOuterClass;
