@@ -274,27 +274,6 @@ public class PartitionStateMachine extends BaseStateMachine {
         return resList.get(0);
     }
 
-    //TODO: add streaming
-    @Override
-    public CompletableFuture<DataStream> stream(RaftClientRequest request) {
-        final ByteString reqByteString = request.getMessage().getContent();
-        final FileStoreRequestProto proto;
-        try {
-            proto = FileStoreRequestProto.parseFrom(reqByteString);
-        } catch (InvalidProtocolBufferException e) {
-            return StreamCommon.completeExceptionally(
-                    "Failed to parse stream header", e);
-        }
-        return files.createDataChannel(proto.getStream().getPath().toStringUtf8())
-                .thenApply(LocalStream::new);
-    }
-
-    @Override
-    public CompletableFuture<?> link(DataStream stream, LogEntryProto entry) {
-        log.info("linking {}", stream);
-        return files.streamLink(stream);
-    }
-
     @SneakyThrows
     @Override
     public CompletableFuture<Message> applyTransaction(TransactionContext trx) {
@@ -335,30 +314,5 @@ public class PartitionStateMachine extends BaseStateMachine {
 
     public void setLastAppliedTermIndex(TermIndex newTI) {
         super.setLastAppliedTermIndex(newTI);
-    }
-
-    static class LocalStream implements DataStream {
-        private final DataChannel dataChannel;
-
-        LocalStream(DataChannel dataChannel) {
-            this.dataChannel = dataChannel;
-        }
-
-        @Override
-        public DataChannel getDataChannel() {
-            return dataChannel;
-        }
-
-        @Override
-        public CompletableFuture<?> cleanUp() {
-            return CompletableFuture.supplyAsync(() -> {
-                try {
-                    dataChannel.close();
-                    return true;
-                } catch (IOException e) {
-                    return StreamCommon.completeExceptionally("Failed to close data channel", e);
-                }
-            });
-        }
     }
 }

@@ -21,7 +21,7 @@ public class PartitionWriteHandler implements WriteHandler {
             var smLog = entry.getStateMachineLogEntry();
             var publishReq = request.getPublish();
             var machineData = smLog.getStateMachineEntry().getStateMachineData();
-            PublishRequestDataOuterClass.PublishRequestData publishData = null;
+            PublishRequestDataOuterClass.PublishRequestData publishData;
             try {
                 publishData = PublishRequestDataOuterClass.PublishRequestData.parseFrom(machineData);
             } catch (InvalidProtocolBufferException e) {

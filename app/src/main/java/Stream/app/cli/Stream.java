@@ -7,8 +7,8 @@ import java.util.List;
 /**
  * This class enumerates all the commands enqueued by FileStore state machine.
  */
-public final class FileStore {
-    private FileStore() {
+public final class Stream {
+    private Stream() {
     }
 
     public static List<SubCommandBase> getSubCommands() {

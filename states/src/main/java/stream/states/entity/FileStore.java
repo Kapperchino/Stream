@@ -248,17 +248,6 @@ public class FileStore implements Closeable {
         }, committer);
     }
 
-    public CompletableFuture<FileStoreDataChannel> createDataChannel(String p) {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                final Path full = resolve(normalize(p));
-                return new FileStoreDataChannel(full);
-            } catch (IOException e) {
-                throw new CompletionException("Failed to create " + p, e);
-            }
-        }, writer);
-    }
-
     protected static class PathDeserializer extends KeyDeserializer {
         @Override
         public Path deserializeKey(String key, DeserializationContext ctxt) {

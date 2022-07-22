@@ -17,7 +17,7 @@
  */
 package Stream.app;
 
-import Stream.app.cli.FileStore;
+import Stream.app.cli.Stream;
 import Stream.app.cli.SubCommandBase;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterException;
@@ -72,8 +72,8 @@ public final class Runner {
     }
 
     private static List<SubCommandBase> initializeCommands(String command) {
-        if (command.equalsIgnoreCase(JavaUtils.getClassSimpleName(FileStore.class))) {
-            return FileStore.getSubCommands();
+        if (command.equalsIgnoreCase(JavaUtils.getClassSimpleName(Stream.class))) {
+            return Stream.getSubCommands();
         }
         return null;
     }

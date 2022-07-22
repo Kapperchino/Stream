@@ -17,7 +17,6 @@ import stream.models.proto.meta.ClusterMetaOuterClass;
 import stream.models.proto.meta.ShardGroupMetaOuterClass;
 import stream.models.proto.meta.ShardGroupMetaOuterClass.ShardGroupMeta;
 import stream.models.proto.meta.TopicOuterClass;
-import stream.models.proto.responses.CreateTopicResponseOuterClass;
 import stream.models.proto.responses.CreateTopicResponseOuterClass.CreateTopicResponse;
 import stream.states.partitions.PartitionManager;
 
